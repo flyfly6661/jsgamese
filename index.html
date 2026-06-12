@@ -20,6 +20,7 @@
         .particle { position: absolute; bottom: -20px; border-radius: 50%; animation: floatUp linear infinite; }
         @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(-110vh) scale(1.5); opacity: 0; } }
 
+        /* --- 彈出視窗基礎樣式 --- */
         #intro-screen, #outro-screen, #manual-modal, #menu-modal {
             position: fixed; inset: 0; z-index: 100;
             background: rgba(15, 23, 42, 0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -41,8 +42,7 @@
         #header { text-align: center; margin-bottom: 5px; }
         
         #level-title { font-size: 24px; font-weight: bold; margin: 2px 0; color: #38bdf8; text-shadow: 0 2px 4px rgba(0,0,0,0.5); transition: color 0.3s; cursor: pointer; }
-        #level-info { font-size: 13px; color: #facc15; margin: 2px 0; }
-        #level-timer { font-size: 14px; color: #38bdf8; font-weight: bold; margin-bottom: 6px; }
+        #level-info { font-size: 13px; color: #facc15; margin-bottom: 8px; }
 
         #game-board {
             display: grid; gap: 2px; width: 88vmin; height: 88vmin; max-width: 500px; max-height: 500px;
@@ -105,6 +105,14 @@
         
         .cell.lightbulb { background-color: #fde047; box-shadow: 0 0 20px #fde047; z-index: 6; }
         .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
+
+        /* 補回當前滑動方塊的高亮藍色方塊樣式 */
+        .cell.current-head {
+            background-color: #1054e6 !important;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+            animation: headPulse 0.8s infinite alternate; z-index: 10;
+        }
+        @keyframes headPulse { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.03); filter: brightness(1.2); } }
 
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes pulseObj { 0% { transform: scale(0.9); } 100% { transform: scale(1.1); } }
@@ -209,7 +217,7 @@
 
 <script>
     (() => {
-        // 部署至 Vercel 後，直接使用相對於 Vercel 上的 Serverless 函式呼叫
+        // 發送至 Serverless 後端之相對路徑
         const API_BASE = ''; 
 
         // --- 漂浮特效 ---
@@ -269,7 +277,6 @@
             { lvl: 180, icon: '💡', text: '<b>探照視野：</b>地圖會被黑霧完全籠罩！你只能看見周圍一格的路，摸黑找到探照燈即可照亮全圖！' }
         ];
 
-        // 綁定至 window 確保內嵌 onclick 可以呼叫
         window.openManual = function() {
             const list = document.getElementById('manual-list'); list.innerHTML = '';
             manuals.forEach(m => {
@@ -339,12 +346,8 @@
                 alert("🔓 開發者模式已解鎖！現在你可以直接點擊標題跳關了。");
                 return;
             }
-            secretTapTimer = setTimeout(() => { secretTapCountReset();}, 1000);
+            secretTapTimer = setTimeout(() => { secretTapCount = 0; }, 1000);
         };
-
-        function TapCountReset() {
-            secretTapCount = 0;
-        }
 
         function promptLevelJump() {
             let target = prompt(`開發者模式：請輸入要跳躍的關卡 (1-${MAX_LEVEL})`, currentLevel);
@@ -365,7 +368,7 @@
             } 
         };
 
-        // --- 前後端分離：向 Serverless 後端提取關卡 (加入計時器) ---
+        // --- 向 Serverless 後端提取關卡 (加入計時器) ---
         async function loadLevel(level) {
             try {
                 const response = await fetch(`${API_BASE}/api/level?level=${level}`);
@@ -403,7 +406,7 @@
             let mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
             let secs = String(elapsed % 60).padStart(2, '0');
             document.getElementById('level-timer').innerText = `時間: ${mins}:${secs}`;
-        }
+        };
 
         window.resetCurrentLevel = function() { 
             if (path.length === totalPlayable) return; 
@@ -606,7 +609,7 @@
             checkWin();
         }
 
-        // 過關判定邏輯 - 修正了解鎖與提示呼叫
+        // 過關判定邏輯
         function checkWin() {
             if (path.length === totalPlayable) {
                 isDrawing = false; 
