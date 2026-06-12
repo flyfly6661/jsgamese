@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>一筆畫拼圖 - ULTIMATE 發布版</title>
+    <title>一筆畫拼圖 - ULTIMATE 最終紀錄版</title>
     <style>
         :root { --cols: 5; }
         * { box-sizing: border-box; }
@@ -89,7 +89,7 @@
         .cell.bridge.path-twice { background-color: #ec4899; } 
 
         .cell.key { background-color: #facc15; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5); }
-        .cell.key::before { content: '🗝️'; animation: pulseObj 1s infinite alternate; }
+        .cell.key::before { content: '🗝️'; animation: pulseObj 1m infinite alternate; }
         .cell.lock { background-color: #1e293b; border: 2px solid #facc15; }
         .cell.lock::before { content: '🔒'; }
 
@@ -106,7 +106,6 @@
         .cell.lightbulb { background-color: #fde047; box-shadow: 0 0 20px #fde047; z-index: 6; }
         .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
 
-        /* 補回當前滑動方塊的高亮藍色方塊樣式 */
         .cell.current-head {
             background-color: #1054e6 !important;
             box-shadow: 0 0 15px rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
@@ -217,8 +216,11 @@
 
 <script>
     (() => {
-        // 發送至 Serverless 後端之相對路徑
         const API_BASE = ''; 
+
+        // --- 本地持久化紀錄（F5 不消失） ---
+        let clearedLevels = JSON.parse(localStorage.getItem('puzzle_clearedLevels')) || [];
+        let maxUnlockedLevel = parseInt(localStorage.getItem('puzzle_maxUnlockedLevel')) || 1;
 
         // --- 漂浮特效 ---
         function initParticles() {
@@ -254,9 +256,6 @@
         let isDrawing = false, path = [], totalPlayable = 0;
         let bridgeVisits = {}; 
         let isFogLevel = false, isFogCleared = false, isUnlocked = false;
-
-        let clearedLevels = [];
-        let maxUnlockedLevel = 1;
 
         // 計時器變數
         let timerInterval = null;
@@ -346,8 +345,12 @@
                 alert("🔓 開發者模式已解鎖！現在你可以直接點擊標題跳關了。");
                 return;
             }
-            secretTapTimer = setTimeout(() => { secretTapCount = 0; }, 1000);
+            secretTapTimer = setTimeout(() => { secretTapCountReset(); }, 1000);
         };
+        
+        function TapCountReset() {
+            secretTapCount = 0;
+        }
 
         function promptLevelJump() {
             let target = prompt(`開發者模式：請輸入要跳躍的關卡 (1-${MAX_LEVEL})`, currentLevel);
@@ -362,13 +365,14 @@
             if (currentLevel < MAX_LEVEL) { 
                 currentLevel++;
                 maxUnlockedLevel = Math.max(maxUnlockedLevel, currentLevel + 1); 
+                localStorage.setItem('puzzle_maxUnlockedLevel', maxUnlockedLevel);
                 loadLevel(currentLevel); 
             } else { 
                 alert("這已經是最後一關了！"); 
             } 
         };
 
-        // --- 向 Serverless 後端提取關卡 (加入計時器) ---
+        // --- 向 Serverless 後端提取關卡 ---
         async function loadLevel(level) {
             try {
                 const response = await fetch(`${API_BASE}/api/level?level=${level}`);
@@ -406,7 +410,7 @@
             let mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
             let secs = String(elapsed % 60).padStart(2, '0');
             document.getElementById('level-timer').innerText = `時間: ${mins}:${secs}`;
-        };
+        }
 
         window.resetCurrentLevel = function() { 
             if (path.length === totalPlayable) return; 
@@ -618,8 +622,10 @@
 
                 if (!clearedLevels.includes(currentLevel)) {
                     clearedLevels.push(currentLevel);
+                    localStorage.setItem('puzzle_clearedLevels', JSON.stringify(clearedLevels));
                 }
                 maxUnlockedLevel = Math.max(maxUnlockedLevel, currentLevel + 1);
+                localStorage.setItem('puzzle_maxUnlockedLevel', maxUnlockedLevel);
 
                 if (currentLevel < MAX_LEVEL) {
                     const winMsg = document.createElement('div');
@@ -653,7 +659,7 @@
         };
 
         // 初始化載入 Lv.1
-        loadLevel(1);
+        loadLevel(currentLevel);
     })();
 </script>
 </body>
