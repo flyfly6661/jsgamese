@@ -18,7 +18,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
 
     let globalAttempts = 0;
     let finalMap = [];
-    let currentPortals = {}, currentBombs = {}; // 宣告區域變數
+    let currentPortals = {}, currentBombs = {};
 
     while (globalAttempts < 300) {
         globalAttempts++;
@@ -114,6 +114,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
             }
         }
 
+        // 防禦性修正：確保炸彈與隱藏牆只會覆蓋一般路徑 (1)
         if (hasBomb) {
             let validIndices = Array.from(bestPath.keys()).slice(2, -2).sort(() => Math.random() - 0.5);
             for (let i = 0; i < validIndices.length; i++) {
@@ -123,6 +124,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
                     for (let j = 1; j <= hideCount; j++) {
                         if (idx + j >= bestPath.length) { canPlace = false; break; }
                         let nPos = bestPath[idx + j];
+                        // 嚴格檢查：必須是基本路徑方塊 (1) 才能設為炸彈引爆範圍，避免衝擊傳送門或十字橋邏輯
                         if (finalMap[nPos.r][nPos.c] !== 1) { canPlace = false; break; }
                         hidden.push({ r: nPos.r, c: nPos.c });
                     }
@@ -185,7 +187,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
         if (hasArrow) {
             let idxs = [];
             for (let i = 2; i < bestPath.length - 2; i++) {
-                if (finalMap[bestPath[i].r][finalMap[i].c] === 1) idxs.push(i);
+                if (finalMap[bestPath[i].r][bestPath[i].c] === 1) idxs.push(i);
             }
             if (idxs.length > 0) {
                 let idx = idxs[Math.floor(Math.random() * idxs.length)];
@@ -200,7 +202,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
         if (hasFog) {
             let idxs = [];
             for (let i = 2; i < bestPath.length - 2; i++) {
-                if (finalMap[bestPath[i].r][finalMap[i].c] === 1) idxs.push(i);
+                if (finalMap[bestPath[i].r][bestPath[i].c] === 1) idxs.push(i);
             }
             if (idxs.length > 0) {
                 let idx = idxs[Math.floor(Math.random() * idxs.length)];
@@ -266,8 +268,8 @@ export default function handler(req, res) {
         rows: rows,
         cols: rows,
         map: mapData.map,
-        portals: mapData.portals, // 正確對應傳送門
-        bombs: mapData.bombs,     // 正確對應炸彈
+        portals: mapData.portals,
+        bombs: mapData.bombs,
         isFogLevel: activeFeats.includes('fog'),
         info: activeFeats
     });
