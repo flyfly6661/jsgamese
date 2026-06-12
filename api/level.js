@@ -18,6 +18,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
 
     let globalAttempts = 0;
     let finalMap = [];
+    let currentPortals = {}, currentBombs = {}; // 宣告區域變數
 
     while (globalAttempts < 300) {
         globalAttempts++;
@@ -26,13 +27,13 @@ function generateSolvableMap(rows, cols, coverage, features) {
         while (bestPath.length < Math.floor(rows * cols * coverage) && attempts < maxAttempts) {
             let currentPath = []; let tempVisited = Array.from({ length: rows }, () => Array(cols).fill(false));
             let jumped = false;
-            let bridgeCountLocal = 0; // 十字橋熔斷計數器
+            let bridgeCountLocal = 0; 
             let r = Math.floor(Math.random() * rows), c = Math.floor(Math.random() * cols);
             currentPath.push({ r, c }); tempVisited[r][c] = true;
 
             while (true) {
                 let moved = false;
-                if (hasPortal && !jumped && currentPath.length >= 3) {
+                if (hasPortal && !jumped && currentPath.length > 3 && Math.random() < 0.1) {
                     let unv = [];
                     for (let ir = 0; ir < rows; ir++) {
                         for (let ic = 0; ic < cols; ic++) {
@@ -45,7 +46,6 @@ function generateSolvableMap(rows, cols, coverage, features) {
                     }
                 }
                 
-                // 十字橋生成引擎（嚴格限制每關最多 5 個）
                 if (!moved && hasBridge && currentPath.length >= 4 && bridgeCountLocal < 5) {
                     let dirs = [{ dr: -2, dc: 0 }, { dr: 2, dc: 0 }, { dr: 0, dc: -2 }, { dr: 0, dc: 2 }];
                     for (let dir of dirs) {
@@ -70,6 +70,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
                         }
                     }
                 }
+                
                 if (!moved) {
                     let neighbors = [];
                     const dirs = [{ dr: -1, dc: 0 }, { dr: 1, dc: 0 }, { dr: 0, dc: -1 }, { dr: 0, dc: 1 }];
@@ -87,7 +88,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
         }
 
         finalMap = Array.from({ length: rows }, () => Array(cols).fill(0));
-        let currentPortals = {}, currentBombs = {};
+        currentPortals = {}; currentBombs = {};
 
         for (let i = 0; i < bestPath.length; i++) { let p = bestPath[i]; finalMap[p.r][p.c] = 1; }
         finalMap[bestPath[0].r][bestPath[0].c] = 2;
@@ -113,7 +114,6 @@ function generateSolvableMap(rows, cols, coverage, features) {
             }
         }
 
-        // 修正炸彈 slice 邊界問題
         if (hasBomb) {
             let validIndices = Array.from(bestPath.keys()).slice(2, -2).sort(() => Math.random() - 0.5);
             for (let i = 0; i < validIndices.length; i++) {
@@ -135,7 +135,6 @@ function generateSolvableMap(rows, cols, coverage, features) {
             }
         }
 
-        // 鑰匙與鎖鏈門因果校驗
         if (hasKey) {
             let idxs = [];
             for (let i = 2; i < bestPath.length - 2; i++) {
@@ -186,7 +185,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
         if (hasArrow) {
             let idxs = [];
             for (let i = 2; i < bestPath.length - 2; i++) {
-                if (finalMap[bestPath[i].r][bestPath[i].c] === 1) idxs.push(i);
+                if (finalMap[bestPath[i].r][finalMap[i].c] === 1) idxs.push(i);
             }
             if (idxs.length > 0) {
                 let idx = idxs[Math.floor(Math.random() * idxs.length)];
@@ -204,8 +203,8 @@ function generateSolvableMap(rows, cols, coverage, features) {
                 if (finalMap[bestPath[i].r][finalMap[i].c] === 1) idxs.push(i);
             }
             if (idxs.length > 0) {
-                let fIdx = idxs[Math.floor(Math.random() * idxs.length)];
-                finalMap[bestPath[fIdx].r][bestPath[fIdx].c] = 14;
+                let idx = idxs[Math.floor(Math.random() * idxs.length)];
+                finalMap[bestPath[idx].r][bestPath[idx].c] = 14;
             }
         }
 
@@ -219,10 +218,10 @@ function generateSolvableMap(rows, cols, coverage, features) {
         if (hasFog && !checkMapContains(finalMap, 14)) isMapValid = false;
 
         if (isMapValid || globalAttempts >= 300) {
-            break;
+            return { map: finalMap, portals: currentPortals, bombs: currentBombs };
         }
     }
-    return finalMap;
+    return { map: finalMap, portals: {}, bombs: {} };
 }
 
 export default function handler(req, res) {
@@ -266,9 +265,9 @@ export default function handler(req, res) {
     res.status(200).json({
         rows: rows,
         cols: rows,
-        map: mapData,
-        portals: {}, 
-        bombs: {},
+        map: mapData.map,
+        portals: mapData.portals, // 正確對應傳送門
+        bombs: mapData.bombs,     // 正確對應炸彈
         isFogLevel: activeFeats.includes('fog'),
         info: activeFeats
     });
