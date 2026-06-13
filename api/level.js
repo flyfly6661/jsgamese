@@ -1,679 +1,276 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>一筆畫拼圖 - ULTIMATE 最終紀錄版</title>
-    <style>
-        :root { --cols: 5; }
-        * { box-sizing: border-box; }
+// /api/level.js
 
-        body {
-            background: linear-gradient(45deg, #0f172a, #1e1b4b, #020617, #0f172a); background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite; display: flex; flex-direction: column; align-items: center;
-            justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; color: white; 
-            -webkit-user-select: none; user-select: none; overflow: hidden; 
+function checkMapContains(m, targetValues) {
+    if (!Array.isArray(targetValues)) targetValues = [targetValues];
+    for (let r = 0; r < m.length; r++) {
+        for (let c = 0; c < m[r].length; c++) {
+            if (targetValues.includes(m[r][c])) return true;
         }
-        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-
-        #particle-container { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
-        .particle { position: absolute; bottom: -20px; border-radius: 50%; animation: floatUp linear infinite; }
-        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(-110vh) scale(1.5); opacity: 0; } }
-
-        /* --- 彈出視窗基礎樣式 --- */
-        #intro-screen, #outro-screen, #manual-modal, #menu-modal {
-            position: fixed; inset: 0; z-index: 100;
-            background: rgba(15, 23, 42, 0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-        
-        .title-text { font-size: 42px; font-weight: bold; color: #38bdf8; text-shadow: 0 0 20px rgba(56, 189, 248, 0.8); margin-bottom: 20px; text-align: center; }
-        .subtitle-text { font-size: 16px; color: #94a3b8; margin-bottom: 40px; text-align: center; line-height: 1.5; padding: 0 20px; }
-
-        .btn {
-            padding: 12px 30px; font-size: 20px; font-weight: bold; cursor: pointer;
-            border: none; border-radius: 50px; background-color: #ec4899; color: white;
-            box-shadow: 0 0 15px rgba(236, 72, 153, 0.6); transition: all 0.2s;
-        }
-        .btn:active { transform: scale(0.95); }
-
-        #game-wrapper { display: flex; flex-direction: column; align-items: center; z-index: 1; position: relative; opacity: 0; transition: opacity 0.5s; width: 100%; }
-        #header { text-align: center; margin-bottom: 5px; }
-        
-        #level-title { font-size: 24px; font-weight: bold; margin: 2px 0; color: #38bdf8; text-shadow: 0 2px 4px rgba(0,0,0,0.5); transition: color 0.3s; cursor: pointer; }
-        #level-info { font-size: 13px; color: #facc15; margin-bottom: 8px; }
-
-        #game-board {
-            display: grid; gap: 2px; width: 88vmin; height: 88vmin; max-width: 500px; max-height: 500px;
-            background-color: rgba(30, 41, 59, 0.85); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
-            padding: 8px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            touch-action: none;
-        }
-        
-        .board-win-anim { animation: boardWin 0.6s ease forwards; }
-        @keyframes boardWin { 0% { transform: scale(1); } 50% { transform: scale(1.03); box-shadow: 0 0 40px rgba(74, 222, 128, 0.4); } 100% { transform: scale(1); } }
-
-        .cell {
-            min-width: 0; min-height: 0; width: 100%; height: 100%;
-            border-radius: 6px; transition: background-color 0.15s, opacity 0.2s;
-            display: flex; justify-content: center; align-items: center;
-            font-size: calc(35vmin / var(--cols)); position: relative;
-            animation: popInCell 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-        @keyframes popInCell { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-
-        .cell.empty { background-color: transparent; }
-        .cell.playable { background-color: rgba(51, 65, 85, 0.9); cursor: pointer; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3); }
-        .cell.start { background-color: #bd5a8b; }
-        .cell.start::after { content: ''; width: 30%; height: 30%; background-color: white; border-radius: 50%; }
-
-        @keyframes jelly { 0% { transform: scale(0.8); } 40% { transform: scale(1.15); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }
-        .cell.path { background-color: #ec4899; animation: jelly 0.3s ease-out forwards; }
-        
-        .cell.portal { background-color: #7c3aed; box-shadow: 0 0 10px rgba(139, 92, 246, 0.8); z-index: 5; }
-        .cell.portal::before { content: '🌀'; display: inline-block; font-size: calc(50vmin / var(--cols)); animation: spin 3s linear infinite; }
-        
-        .cell.bomb { background-color: #334155; cursor: pointer; }
-        .cell.bomb::before { content: '💣'; animation: pulseObj 0.8s infinite alternate; }
-        .cell.rock { background-color: rgba(15, 23, 42, 0.8); box-shadow: inset 0 0 10px black; }
-        .cell.rock::before { content: '🧱'; opacity: 0.8; }
-
-        .cell.ice { background-color: rgba(103, 232, 249, 0.3); border: 1px solid #67e8f9; box-shadow: inset 0 0 10px rgba(103,232,249,0.2); }
-        .cell.ice::before { content: '🧊'; opacity: 0.7; }
-        .cell.ice.path { background-color: #38bdf8; border: none; }
-
-        .cell.bridge { background-color: #475569; border: 2px dashed #94a3b8; }
-        .cell.bridge::before { content: '🔀'; opacity: 0.8; }
-        .cell.bridge.path-once { background-color: #d946ef; } 
-        .cell.bridge.path-twice { background-color: #ec4899; } 
-
-        .cell.key { background-color: #facc15; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5); }
-        .cell.key::before { content: '🗝️'; animation: pulseObj 1m infinite alternate; }
-        .cell.lock { background-color: #1e293b; border: 2px solid #facc15; }
-        .cell.lock::before { content: '🔒'; }
-
-        .cell.arrow-up::before { content: '⬆️'; opacity: 0.8; }
-        .cell.arrow-down::before { content: '⬇️'; opacity: 0.8; }
-        .cell.arrow-left::before { content: '⬅️'; opacity: 0.8; }
-        .cell.arrow-right::before { content: '➡️'; opacity: 0.8; }
-        .cell[class*="arrow-"] { background-color: #0f766e; }
-        .cell[class*="arrow-"].path { background-color: #ec4899; }
-
-        .foggy .cell:not(.revealed):not(.lightbulb) { background-color: #020617 !important; border: none !important; box-shadow: none !important; }
-        .foggy .cell:not(.revealed):not(.lightbulb)::before, .foggy .cell:not(.revealed):not(.lightbulb)::after { opacity: 0 !important; }
-        
-        .cell.lightbulb { background-color: #fde047; box-shadow: 0 0 20px #fde047; z-index: 6; }
-        .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
-
-        .cell.current-head {
-            background-color: #1054e6 !important;
-            box-shadow: 0 0 15px rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
-            animation: headPulse 0.8s infinite alternate; z-index: 10;
-        }
-        @keyframes headPulse { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.03); filter: brightness(1.2); } }
-
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        @keyframes pulseObj { 0% { transform: scale(0.9); } 100% { transform: scale(1.1); } }
-
-        .boom-clear { animation: boomClear 0.5s ease-out forwards !important; z-index: 9; }
-        @keyframes boomClear { 0% { background-color: #ef4444; transform: scale(1); } 50% { background-color: white; transform: scale(1.2); } 100% { background-color: rgba(51, 65, 85, 0.9); transform: scale(1); } }
-        
-        #message { height: 28px; margin-top: 10px; font-size: 20px; font-weight: bold; }
-        
-        #controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 5px; }
-        #controls button { padding: 10px 15px; font-size: 15px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; color: white; transition: 0.2s; }
-        #reset-btn { background-color: #f43f5e; } #reset-btn:hover { background-color: #e11d48; }
-        #manual-btn { background-color: #3b82f6; } #manual-btn:hover { background-color: #2563eb; }
-        #menu-btn { background-color: #8b5cf6; } #menu-btn:hover { background-color: #7c3aed; }
-        
-        #skip-btn { display: none; background-color: #f59e0b; } #skip-btn:hover { background-color: #d97706; } 
-        #next-btn { display: none; background-color: #4ade80; color: #064e3b; animation: jelly 0.5s; }
-
-        #manual-content { background: #1e293b; padding: 20px; border-radius: 12px; max-width: 90%; max-height: 80vh; overflow-y: auto; color: white; text-align: left; }
-        .manual-item { display: flex; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #334155; }
-        .manual-icon { font-size: 30px; margin-right: 15px; min-width: 40px; text-align: center; }
-        .confetti { position: fixed; width: 10px; height: 10px; z-index: 50; animation: fall 3s linear forwards; }
-        @keyframes fall { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
-
-        @keyframes simpleFadeUp {
-            0% { transform: translate(-50%, -35%); opacity: 0; }
-            100% { transform: translate(-50%, -50%); opacity: 1; }
-        }
-        .win-text-simple {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 64px; font-weight: bold; color: #4ade80; z-index: 99; letter-spacing: 2px;
-            pointer-events: none; text-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-            animation: simpleFadeUp 0.3s ease-out forwards;
-        }
-
-        #menu-content { background: #1e293b; padding: 20px; border-radius: 12px; width: 90%; max-width: 450px; height: 80vh; display: flex; flex-direction: column; color: white; }
-        .menu-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; overflow-y: auto; flex-grow: 1; padding-right: 5px; margin-bottom: 15px; }
-        .menu-cell {
-            background-color: #334155; padding: 12px 5px; border-radius: 8px; text-align: center;
-            font-size: 14px; cursor: pointer; transition: background-color 0.15s, transform 0.1s;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px;
-        }
-        .menu-cell:hover { background-color: #475569; }
-        .menu-cell:active { transform: scale(0.95); }
-        .menu-cell.current { border: 2px solid #38bdf8; font-weight: bold; background-color: #1e3a8a; }
-        .menu-cell.cleared { color: #4ade80; }
-        .menu-cell.menu-locked { background-color: #1e293b; color: #64748b; cursor: not-allowed; opacity: 0.6; }
-        .menu-check { font-size: 12px; color: #4ade80; }
-    </style>
-</head>
-<body>
-
-    <div id="particle-container"></div>
-
-    <div id="intro-screen">
-        <div class="title-text">一筆畫拼圖<br>ULTIMATE</div>
-        <div class="subtitle-text">256個關卡 • 7種特殊機制<br>填滿所有方塊，成為解謎大師！</div>
-        <button class="btn" onclick="startGame()">開始遊戲</button>
-    </div>
-
-    <div id="manual-modal" style="visibility: hidden; opacity: 0;">
-        <div id="manual-content">
-            <h2 style="color: #38bdf8; text-align: center; margin-top: 0;">📖 遊戲說明書</h2>
-            <div id="manual-list"></div>
-            <div style="text-align: center; margin-top: 20px;">
-                <button class="btn" style="padding: 8px 20px; font-size: 16px;" onclick="closeManual()">關閉</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="menu-modal" style="visibility: hidden; opacity: 0;">
-        <div id="menu-content">
-            <h2 style="color: #38bdf8; text-align: center; margin-top: 0; margin-bottom: 15px;">📋 選擇關卡</h2>
-            <div id="menu-list" class="menu-grid"></div>
-            <div style="text-align: center;">
-                <button class="btn" style="padding: 8px 20px; font-size: 16px; background-color: #64748b; box-shadow: none;" onclick="closeMenu()">關閉</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="outro-screen" style="visibility: hidden; opacity: 0;">
-        <div class="title-text" style="color: #facc15;">🎉 恭喜破關 🎉</div>
-        <div class="subtitle-text">你已經完成了全部 256 個關卡！<br>你就是傳說中的解謎大師！</div>
-    </div>
-
-    <div id="game-wrapper">
-        <div id="header">
-            <div id="level-title" onclick="handleSecretTap()">LEVEL 1</div>
-            <div id="level-info">Tutorial</div>
-            <div id="level-timer">時間: 00:00</div>
-        </div>
-        <div id="game-board"></div>
-        <div id="message"></div>
-        <div id="controls">
-            <button id="reset-btn" onclick="resetCurrentLevel()">↺ 重玩</button>
-            <button id="manual-btn" onclick="openManual()">📖 說明</button>
-            <button id="menu-btn" onclick="openMenu()">📋 選擇關卡目錄</button> 
-            <button id="skip-btn" onclick="skipLevel()">⏭️ 跳關</button>
-            <button id="next-btn" onclick="nextLevel()">NEXT ➔</button>
-        </div>
-    </div>
-
-<script>
-    (() => {
-        const API_BASE = ''; 
-
-        // --- 本地持久化紀錄（F5 不消失） ---
-        let clearedLevels = JSON.parse(localStorage.getItem('puzzle_clearedLevels')) || [];
-        let maxUnlockedLevel = parseInt(localStorage.getItem('puzzle_maxUnlockedLevel')) || 1;
-
-        // --- 漂浮特效 ---
-        function initParticles() {
-            const container = document.getElementById('particle-container');
-            for (let i = 0; i < 30; i++) {
-                let p = document.createElement('div'); p.classList.add('particle');
-                p.style.width = p.style.height = (Math.random()*3+2) + 'px';
-                p.style.left = Math.random()*100 + 'vw';
-                p.style.backgroundColor = Math.random()>0.5 ? 'rgba(236,72,153,0.5)' : 'rgba(56,189,248,0.6)';
-                p.style.animationDuration = (Math.random()*10+5) + 's';
-                p.style.animationDelay = (Math.random()*5) + 's';
-                container.appendChild(p);
-            }
-        }
-        initParticles();
-
-        function fireConfetti(amount = 40) {
-            const colors = ['#ec4899', '#38bdf8', '#4ade80', '#facc15', '#a855f7'];
-            for (let i = 0; i < amount; i++) {
-                let c = document.createElement('div'); c.classList.add('confetti');
-                c.style.left = Math.random()*100 + 'vw'; c.style.backgroundColor = colors[Math.floor(Math.random()*colors.length)];
-                c.style.animationDuration = (Math.random()*2+2) + 's';
-                document.body.appendChild(c); setTimeout(() => c.remove(), 4000); 
-            }
-        }
-
-        // --- 遊戲變數 ---
-        let currentLevel = 1; const MAX_LEVEL = 256;
-        let currentRows = 4, currentCols = 4;
-        let levelMap = [], initialLevelMap = [];
-        
-        let currentPortals = {}, currentBombs = {};
-        let isDrawing = false, path = [], totalPlayable = 0;
-        let bridgeVisits = {}; 
-        let isFogLevel = false, isFogCleared = false, isUnlocked = false;
-
-        // 計時器變數
-        let timerInterval = null;
-        let startTime = 0;
-
-        let secretTapCount = 0;
-        let devModeActive = false;
-        let secretTapTimer;
-
-        const manuals = [
-            { lvl: 1, icon: '🔲', text: '<b>基本規則：</b>滑動填滿所有深色方塊，不能走回頭路。' },
-            { lvl: 9, icon: '🌀', text: '<b>傳送門：</b>進入後會瞬間移動到另一端，並中斷畫筆，需重新點擊。' },
-            { lvl: 17, icon: '💣', text: '<b>炸彈與牆：</b>將線連到炸彈上，會炸毀周圍的「🧱磚牆」開拓出隱藏路線！' },
-            { lvl: 32, icon: '🧊', text: '<b>滑行冰塊：</b>踩到冰塊後無法轉彎，會一直線滑動直到撞到障礙物。' },
-            { lvl: 52, icon: '🔀', text: '<b>十字橋：</b>唯一允許「走過兩次」的方塊，但兩次必須是垂直交叉 (一橫一直)。' },
-            { lvl: 84, icon: '🗝️', text: '<b>鑰匙與鎖：</b>碰到鑰匙後，地圖上所有的「🔒鎖鏈門」會瞬間解開變成平地。' },
-            { lvl: 120, icon: '⬆️', text: '<b>單向帶：</b>具有方向箭頭的方塊，你「只能」順著箭頭的方向滑進去。' },
-            { lvl: 180, icon: '💡', text: '<b>探照視野：</b>地圖會被黑霧完全籠罩！你只能看見周圍一格的路，摸黑找到探照燈即可照亮全圖！' }
-        ];
-
-        window.openManual = function() {
-            const list = document.getElementById('manual-list'); list.innerHTML = '';
-            manuals.forEach(m => {
-                if (currentLevel >= m.lvl) list.innerHTML += `<div class="manual-item"><div class="manual-icon">${m.icon}</div><div>${m.text}</div></div>`;
-            });
-            document.getElementById('manual-modal').style.visibility = 'visible'; document.getElementById('manual-modal').style.opacity = '1';
-        };
-        window.closeManual = function() {
-            document.getElementById('manual-modal').style.opacity = '0'; setTimeout(() => document.getElementById('manual-modal').style.visibility = 'hidden', 300);
-        };
-
-        window.openMenu = function() {
-            const list = document.getElementById('menu-list');
-            list.innerHTML = '';
-            
-            for (let i = 1; i <= MAX_LEVEL; i++) {
-                let cell = document.createElement('div');
-                cell.className = 'menu-cell';
-                cell.innerText = `Lv.${i}`;
-                
-                if (i === currentLevel) cell.classList.add('current');
-                
-                if (i > maxUnlockedLevel) {
-                    cell.classList.add('menu-locked');
-                    cell.innerHTML += ' 🔒';
-                } else {
-                    if (clearedLevels.includes(i)) {
-                        cell.classList.add('cleared');
-                        cell.innerHTML += ' <span class="menu-check">✓</span>';
-                    }
-                    cell.onclick = () => selectLevel(i);
-                }
-                list.appendChild(cell);
-            }
-            
-            document.getElementById('menu-modal').style.visibility = 'visible';
-            document.getElementById('menu-modal').style.opacity = '1';
-        };
-        
-        window.closeMenu = function() {
-            document.getElementById('menu-modal').style.opacity = '0';
-            setTimeout(() => document.getElementById('menu-modal').style.visibility = 'hidden', 300);
-        };
-        
-        function selectLevel(lvl) {
-            currentLevel = lvl;
-            window.closeMenu();
-            loadLevel(currentLevel);
-        }
-
-        window.startGame = function() {
-            document.getElementById('intro-screen').style.opacity = '0';
-            setTimeout(() => { document.getElementById('intro-screen').style.visibility = 'hidden'; document.getElementById('game-wrapper').style.opacity = '1'; loadLevel(currentLevel); }, 300);
-        };
-
-        window.handleSecretTap = function() {
-            if (devModeActive) {
-                promptLevelJump();
-                return;
-            }
-            secretTapCount++;
-            clearTimeout(secretTapTimer);
-            if (secretTapCount >= 5) {
-                devModeActive = true;
-                document.getElementById('skip-btn').style.display = 'block';
-                document.getElementById('level-title').style.cursor = 'pointer';
-                alert("🔓 開發者模式已解鎖！現在你可以直接點擊標題跳關了。");
-                return;
-            }
-            secretTapTimer = setTimeout(() => { secretTapCountReset(); }, 1000);
-        };
-        
-        function TapCountReset() {
-            secretTapCount = 0;
-        }
-
-        function promptLevelJump() {
-            let target = prompt(`開發者模式：請輸入要跳躍的關卡 (1-${MAX_LEVEL})`, currentLevel);
-            if (target !== null) {
-                target = parseInt(target);
-                if (!isNaN(target) && target >= 1 && target <= MAX_LEVEL) { currentLevel = target; loadLevel(currentLevel); } 
-                else alert("輸入無效！");
-            }
-        }
-
-        window.skipLevel = function() { 
-            if (currentLevel < MAX_LEVEL) { 
-                currentLevel++;
-                maxUnlockedLevel = Math.max(maxUnlockedLevel, currentLevel + 1); 
-                localStorage.setItem('puzzle_maxUnlockedLevel', maxUnlockedLevel);
-                loadLevel(currentLevel); 
-            } else { 
-                alert("這已經是最後一關了！"); 
-            } 
-        };
-
-        // --- 向 Serverless 後端提取關卡 ---
-       // ✨ 修改為優先讀取本地快取地圖，若無才向 API 請求並快取
-        async function loadLevel(level) {
-         try {
-              let data;
-             // 取得本地儲存的所有關卡地圖快取
-             const cachedMaps = JSON.parse(localStorage.getItem('puzzle_cachedMaps')) || {};
-
-             // 如果這關已經有紀錄過地圖，直接讀取本地資料，確保關卡長相一模一樣
-              if (cachedMaps[level]) {
-                    data = cachedMaps[level];
-             } else {
-            // 若沒有，才向 Serverless 後端提取並寫入快取
-                    const response = await fetch(`${API_BASE}/api/level?level=${level}`);
-                    data = await response.json();
-                    cachedMaps[level] = data;
-                 localStorage.setItem('puzzle_cachedMaps', JSON.stringify(cachedMaps));
-        }
-
-        currentRows = data.rows;
-        currentCols = data.cols;
-        document.documentElement.style.setProperty('--cols', currentCols);
-        
-        levelMap = data.map;
-        initialLevelMap = JSON.parse(JSON.stringify(levelMap));
-        
-        currentPortals = data.portals || {};
-        currentBombs = data.bombs || {};
-        isFogLevel = data.isFogLevel;
-
-        let infoMix = data.info.length > 0 ? data.info.join(' ') : 'Basic';
-        document.getElementById('level-title').innerText = `LEVEL ${level}`;
-        document.getElementById('level-info').innerText = `Size: ${currentRows}x${currentCols} | Mix: ${infoMix}`;
-        
-        // 重置計時器
-        clearInterval(timerInterval);
-        startTime = Date.now();
-        document.getElementById('level-timer').innerText = "時間: 00:00";
-        timerInterval = setInterval(updateTimer, 1000);
-
-        initGame();
-    } catch (err) {
-        console.error("無法取得關卡資料，請確認 API 運行狀態。", err);
     }
+    return false;
 }
 
-        function updateTimer() {
-            let elapsed = Math.floor((Date.now() - startTime) / 1000);
-            let mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
-            let secs = String(elapsed % 60).padStart(2, '0');
-            document.getElementById('level-timer').innerText = `時間: ${mins}:${secs}`;
-        }
+function generateSolvableMap(rows, cols, coverage, features) {
+    let hasPortal = features.includes('portal'), hasBridge = features.includes('bridge');
+    let hasIce = features.includes('ice'), hasBomb = features.includes('bomb');
+    let hasKey = features.includes('key'), hasArrow = features.includes('arrow');
+    let hasFog = features.includes('fog');
 
-        window.resetCurrentLevel = function() { 
-            if (path.length === totalPlayable) return; 
-            levelMap = JSON.parse(JSON.stringify(initialLevelMap)); 
-            
-            // 重置計時器
-            clearInterval(timerInterval);
-            startTime = Date.now();
-            document.getElementById('level-timer').innerText = "時間: 00:00";
-            timerInterval = setInterval(updateTimer, 1000);
+    let globalAttempts = 0;
+    let finalMap = [];
+    let currentPortals = {}, currentBombs = {};
 
-            initGame(); 
-        };
+    while (globalAttempts < 300) {
+        globalAttempts++;
+        let bestPath = []; let attempts = 0; let maxAttempts = rows > 12 ? 300 : 150;
 
-        function updateVision() {
-            let head = path[path.length - 1]; if (!head) return;
-            let coords = [{r: head.r, c: head.c}, {r: head.r-1, c: head.c}, {r: head.r+1, c: head.c}, {r: head.r, c: head.c-1}, {r: head.r, c: head.c+1}];
-            coords.forEach(pos => {
-                if(pos.r>=0 && pos.r<currentRows && pos.c>=0 && pos.c<currentCols) {
-                    let el = getCell(pos.r, pos.c); if (el) el.classList.add('revealed');
-                }
-            });
-        }
+        while (bestPath.length < Math.floor(rows * cols * coverage) && attempts < maxAttempts) {
+            let currentPath = []; let tempVisited = Array.from({ length: rows }, () => Array(cols).fill(false));
+            let jumped = false;
+            let bridgeCountLocal = 0; 
+            let r = Math.floor(Math.random() * rows), c = Math.floor(Math.random() * cols);
+            currentPath.push({ r, c }); tempVisited[r][c] = true;
 
-        function initGame() {
-            const board = document.getElementById('game-board');
-            board.style.gridTemplateColumns = `repeat(${currentCols}, 1fr)`;
-            board.style.gridTemplateRows = `repeat(${currentRows}, 1fr)`;
-            board.innerHTML = ''; board.classList.remove('board-win-anim'); 
-            
-            const oldWinText = document.querySelector('.win-text-simple');
-            if (oldWinText) oldWinText.remove();
-
-            path = []; totalPlayable = 0; isDrawing = false; isUnlocked = false; isFogCleared = false; bridgeVisits = {};
-            document.getElementById('message').innerText = ''; document.getElementById('next-btn').style.display = 'none';
-
-            for (let r = 0; r < currentRows; r++) {
-                for (let c = 0; c < currentCols; c++) {
-                    let v = levelMap[r][c]; let el = document.createElement('div'); el.classList.add('cell'); el.dataset.r = r; el.dataset.c = c;
-                    el.style.animationDelay = `${(r + c) * 0.03}s`;
-
-                    if (v === 0) el.classList.add('empty');
-                    else if (v === 1) { el.classList.add('playable'); totalPlayable++; }
-                    else if (v === 2) { el.classList.add('playable', 'start'); totalPlayable++; path.push({ r, c }); }
-                    else if (v === 3) { el.classList.add('playable', 'portal'); totalPlayable++; }
-                    else if (v === 4) { el.classList.add('bomb'); totalPlayable++; }
-                    else if (v === 5) { el.classList.add('rock'); totalPlayable++; }
-                    else if (v === 6) { el.classList.add('playable', 'ice'); totalPlayable++; }
-                    else if (v === 7) { el.classList.add('playable', 'bridge'); totalPlayable += 2; } 
-                    else if (v === 8) { el.classList.add('playable', 'key'); totalPlayable++; }
-                    else if (v === 9) { el.classList.add('lock'); totalPlayable++; }
-                    else if (v >= 10 && v <= 13) { 
-                        el.classList.add('playable'); totalPlayable++;
-                        if(v==10) el.classList.add('arrow-up'); if(v==11) el.classList.add('arrow-down'); 
-                        if(v==12) el.classList.add('arrow-left'); if(v==13) el.classList.add('arrow-right');
+            while (true) {
+                let moved = false;
+                if (hasPortal && !jumped && currentPath.length > 3 && Math.random() < 0.1) {
+                    let unv = [];
+                    for (let ir = 0; ir < rows; ir++) {
+                        for (let ic = 0; ic < cols; ic++) {
+                            if (!tempVisited[ir][ic] && Math.abs(ir - r) + Math.abs(ic - c) > 1) unv.push({ r: ir, c: ic });
+                        }
                     }
-                    else if (v === 14) { el.classList.add('playable', 'lightbulb'); totalPlayable++; }
-
-                    el.addEventListener('mousedown', (e) => handleStart(r, c, e)); el.addEventListener('mouseenter', () => handleMove(r, c));
-                    el.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(r, c, e); }, { passive: false });
-                    board.appendChild(el);
+                    if (unv.length > 0) {
+                        let t = unv[Math.floor(Math.random() * unv.length)];
+                        r = t.r; c = t.c; currentPath.push({ r, c }); tempVisited[r][c] = true; jumped = true; moved = true;
+                    }
+                }
+                
+                if (!moved && hasBridge && currentPath.length >= 4 && bridgeCountLocal < 5) {
+                    let dirs = [{ dr: -2, dc: 0 }, { dr: 2, dc: 0 }, { dr: 0, dc: -2 }, { dr: 0, dc: 2 }];
+                    for (let dir of dirs) {
+                        let nnr = r + dir.dr, nnc = c + dir.dc; let mr = r + dir.dr / 2, mc = c + dir.dc / 2;
+                        if (nnr >= 0 && nnr < rows && nnc >= 0 && nnc < cols && !tempVisited[nnr][nnc] && tempVisited[mr][mc]) {
+                            let idx = currentPath.findIndex(p => p.r === mr && p.c === mc);
+                            if (idx > 0 && idx < currentPath.length - 1) {
+                                let prevNode = currentPath[idx - 1];
+                                let nextNode = currentPath[idx + 1];
+                                let firstPassIsVertical = (prevNode.c === nextNode.c);
+                                let firstPassIsHorizontal = (prevNode.r === nextNode.r);
+                                let canCross = false;
+                                if (firstPassIsVertical && dir.dr === 0) canCross = true;
+                                if (firstPassIsHorizontal && dir.dc === 0) canCross = true;
+                                if (canCross) {
+                                    currentPath.push({ r: nnr, c: nnc, bridgeR: mr, bridgeC: mc, firstStepIdx: idx });
+                                    r = nnr; c = nnc; tempVisited[nnr][nnc] = true;
+                                    bridgeCountLocal++;
+                                    moved = true; break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (!moved) {
+                    let neighbors = [];
+                    const dirs = [{ dr: -1, dc: 0 }, { dr: 1, dc: 0 }, { dr: 0, dc: -1 }, { dr: 0, dc: 1 }];
+                    for (let dir of dirs) {
+                        let nr = r + dir.dr; let nc = c + dir.dc;
+                        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !tempVisited[nr][nc]) neighbors.push({ r: nr, c: nc });
+                    }
+                    if (neighbors.length === 0) break;
+                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    r = next.r; c = next.c; currentPath.push({ r, c }); tempVisited[r][c] = true;
                 }
             }
-
-            if (isFogLevel) { board.classList.add('foggy'); updateVision(); } 
-            else { board.classList.remove('foggy'); }
-            updateAvailableMoves(); updateCurrentHead();
+            if (currentPath.length > bestPath.length) bestPath = currentPath;
+            attempts++;
         }
 
-        function updateAvailableMoves() {
-            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('next-available'));
-            let head = path[path.length - 1]; if (!head) return;
-            const directions = [{ dr: -1, dc: 0 }, { dr: 1, dc: 0 }, { dr: 0, dc: -1 }, { dr: 0, dc: 1 }];
-            directions.forEach(dir => {
-                const nr = head.r + dir.dr; const nc = head.c + dir.dc;
-                if (nr < 0 || nr >= currentRows || nc < 0 || nc >= currentCols) return;
-                const cell = getCell(nr, nc); if (!cell) return;
-                const v = levelMap[nr][nc];
-                if (v === 0 || v === 5 || (v === 9 && !isUnlocked)) return;
-                const isVisited = path.some(p => p.r === nr && p.c === nc);
-                if (isVisited && v !== 7) return;
-                if (v === 10 && dir.dr !== -1) return; if (v === 11 && dir.dr !== 1) return;
-                if (v === 12 && dir.dc !== -1) return; if (v === 13 && dir.dc !== 1) return;
-                if (v === 7) {
-                    const key = `${nr},${nc}`; const axis = dir.dr !== 0 ? 'V' : 'H';
-                    if (!bridgeVisits[key]) { cell.classList.add('next-available'); }
-                    if (bridgeVisits[key] && (bridgeVisits[key].includes(axis) || bridgeVisits[key].length >= 2)) return;
+        finalMap = Array.from({ length: rows }, () => Array(cols).fill(0));
+        currentPortals = {}; currentBombs = {};
+
+        for (let i = 0; i < bestPath.length; i++) { let p = bestPath[i]; finalMap[p.r][p.c] = 1; }
+        finalMap[bestPath[0].r][bestPath[0].c] = 2;
+
+        for (let i = 0; i < bestPath.length; i++) {
+            let p = bestPath[i];
+            if (i > 0 && !p.bridgeR) {
+                let prev = bestPath[i - 1];
+                if (Math.abs(p.r - prev.r) + Math.abs(p.c - prev.c) > 1 && finalMap[prev.r][prev.c] === 1 && finalMap[p.r][p.c] === 1) {
+                    finalMap[prev.r][prev.c] = 3; finalMap[p.r][p.c] = 3;
+                    currentPortals[`${prev.r},${prev.c}`] = { r: p.r, c: p.c }; currentPortals[`${p.r},${p.c}`] = { r: prev.r, c: prev.c };
                 }
-                cell.classList.add('next-available');
-            });
-        }
-
-        function updateCurrentHead() {
-            document.querySelectorAll('.cell').forEach(cell => { cell.classList.remove('current-head'); });
-            let head = path[path.length - 1]; if (!head) return;
-            let el = getCell(head.r, head.c); if (el) { el.classList.add('current-head'); }
-        }
-
-        function handleStart(r, c) { if (path.length > 0 && path.length < totalPlayable && path[path.length-1].r === r && path[path.length-1].c === c) isDrawing = true; }
-        
-        document.getElementById('game-board').addEventListener('touchmove', (e) => {
-            if (!isDrawing) return; e.preventDefault();
-            let touch = e.touches[0]; let target = document.elementFromPoint(touch.clientX, touch.clientY);
-            if (target && target.classList.contains('cell')) handleMove(parseInt(target.dataset.r), parseInt(target.dataset.c));
-        }, { passive: false });
-        document.addEventListener('mouseup', () => isDrawing = false); document.addEventListener('touchend', () => isDrawing = false);
-
-        function getCell(r, c) { return document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`); }
-
-        function handleMove(r, c) {
-            if (!isDrawing) return;
-            let lastPos = path[path.length - 1]; if (lastPos.r === r && lastPos.c === c) return;
-            let dr = r - lastPos.r; let dc = c - lastPos.c;
-            
-            if (dr !== 0 && dc !== 0) {
-                let c1 = { r: lastPos.r, c: c }, c2 = { r: r, c: lastPos.c };
-                let isWalkable = (pos) => {
-                    if (pos.r<0 || pos.r>=currentRows || pos.c<0 || pos.c>=currentCols) return false;
-                    let v = levelMap[pos.r][pos.c]; if (v===0 || v===5 || (v===9 && !isUnlocked)) return false;
-                    return true;
-                };
-                let v1 = isWalkable(c1), v2 = isWalkable(c2);
-                if (v1 && !v2) { _moveLine(c1.r, c1.c); _moveLine(r, c); }
-                else if (v2 && !v1) { _moveLine(c2.r, c2.c); _moveLine(r, c); }
-                else if (v1 && v2) { _moveLine(c1.r, c1.c); _moveLine(r, c); }
-                return;
             }
-            _moveLine(r, c);
+            if (p.bridgeR !== undefined && finalMap[p.bridgeR][p.bridgeC] === 1) finalMap[p.bridgeR][p.bridgeC] = 7;
         }
 
-        function _moveLine(r, c) {
-            let lastPos = path[path.length - 1]; if (lastPos.r === r && lastPos.c === c) return;
-            let dr = r - lastPos.r; let dc = c - lastPos.c;
-            if (dr !== 0 && dc !== 0) return; 
-
-            let stepR = dr === 0 ? 0 : Math.sign(dr); let stepC = dc === 0 ? 0 : Math.sign(dc);
-            let dist = Math.max(Math.abs(dr), Math.abs(dc));
-
-            for (let i = 0; i < dist; i++) {
-                lastPos = path[path.length - 1]; let nextR = lastPos.r + stepR; let nextC = lastPos.c + stepC;
-                if (nextR < 0 || nextR >= currentRows || nextC < 0 || nextC >= currentCols) break;
-                
-                let v = levelMap[nextR][nextC]; if (v === 0 || v === 5 || (v === 9 && !isUnlocked)) break; 
-                
-                let isVis = path.some(p => p.r === nextR && p.c === nextC);
-                if (isVis && v !== 7) break; 
-                
-                if (v === 7) {
-                    let key = `${nextR},${nextC}`; let axis = stepR !== 0 ? 'V' : 'H';
-                    if (!bridgeVisits[key]) bridgeVisits[key] = [];
-                    if (bridgeVisits[key].includes(axis) || bridgeVisits[key].length >= 2) break; 
-                    bridgeVisits[key].push(axis);
+        if (hasIce) {
+            for (let i = 2; i < bestPath.length - 2; i++) {
+                let a = bestPath[i - 1], b = bestPath[i], c = bestPath[i + 1];
+                if (finalMap[b.r][b.c] === 1 && (a.r - b.r === b.r - c.r) && (a.c - b.c === b.c - c.c)) {
+                    if (Math.random() < 0.35) finalMap[b.r][b.c] = 6;
                 }
+            }
+        }
 
-                if (v===10 && stepR!== -1) break; if (v===11 && stepR!== 1) break;
-                if (v===12 && stepC!== -1) break; if (v===13 && stepC!== 1) break;
-
-                let el = getCell(nextR, nextC); path.push({ r: nextR, c: nextC });
-                
-                if (v === 7) {
-                    if (bridgeVisits[`${nextR},${nextC}`].length === 1) el.classList.add('path-once');
-                    else { el.classList.remove('path-once'); el.classList.add('path-twice'); }
-                } else { el.classList.remove('boom-clear'); el.classList.add('path'); }
-
-                if (v === 14) { 
-                    isFogCleared = true;
-                    document.getElementById('game-board').classList.remove('foggy'); 
-                } 
-                if (v === 8 && !isUnlocked) { 
-                    isUnlocked = true;
-                    document.querySelectorAll('.lock').forEach(l => {
-                        l.classList.remove('lock'); l.classList.add('boom-clear', 'playable');
-                        levelMap[l.dataset.r][l.dataset.c] = 1;
-                    });
-                }
-                if (v === 4) { 
-                    el.classList.remove('bomb'); levelMap[nextR][nextC] = 1;
-                    let hidden = currentBombs[`${nextR},${nextC}`];
-                    if (hidden) hidden.forEach(pos => { let rock = getCell(pos.r, pos.c); rock.classList.remove('rock'); rock.classList.add('boom-clear', 'playable'); levelMap[pos.r][pos.c] = 1; });
-                }
-
-                if (isFogLevel && !isFogCleared) updateVision();
-
-                if (v === 3) { 
-                    let link = currentPortals[`${nextR},${nextC}`];
-                    if (link) { path.push({ r: link.r, c: link.c }); getCell(link.r, link.c).classList.add('path'); isDrawing = false; }
-                    break; 
-                }
-
-                if (v === 6) {
-                    let nnR = nextR + stepR, nnC = nextC + stepC;
-                    if (nnR >= 0 && nnR < currentRows && nnC >= 0 && nnC < currentCols) {
-                        let nnV = levelMap[nnR][nnC];
-                        if (nnV !== 0 && nnV !== 5 && !(nnV === 9 && !isUnlocked) && !path.some(p => p.r===nnR && p.c===nnC)) dist++;
+        // 防禦性修正：確保炸彈與隱藏牆只會覆蓋一般路徑 (1)
+        if (hasBomb) {
+            let validIndices = Array.from(bestPath.keys()).slice(2, -2).sort(() => Math.random() - 0.5);
+            for (let i = 0; i < validIndices.length; i++) {
+                let idx = validIndices[i]; let bPos = bestPath[idx];
+                if (finalMap[bPos.r][bPos.c] === 1) {
+                    let hidden = []; let hideCount = Math.floor(Math.random() * 2) + 2; let canPlace = true;
+                    for (let j = 1; j <= hideCount; j++) {
+                        if (idx + j >= bestPath.length) { canPlace = false; break; }
+                        let nPos = bestPath[idx + j];
+                        // 嚴格檢查：必須是基本路徑方塊 (1) 才能設為炸彈引爆範圍，避免衝擊傳送門或十字橋邏輯
+                        if (finalMap[nPos.r][nPos.c] !== 1) { canPlace = false; break; }
+                        hidden.push({ r: nPos.r, c: nPos.c });
+                    }
+                    if (canPlace && hidden.length > 0) {
+                        finalMap[bPos.r][bPos.c] = 4;
+                        hidden.forEach(p => finalMap[p.r][p.c] = 5);
+                        currentBombs[`${bPos.r},${bPos.c}`] = hidden; break;
                     }
                 }
             }
-            updateAvailableMoves();
-            updateCurrentHead();
-            checkWin();
         }
 
-        // 過關判定邏輯
-        function checkWin() {
-            if (path.length === totalPlayable) {
-                isDrawing = false; 
-                document.getElementById('game-board').classList.add('board-win-anim'); 
-                fireConfetti(30);
-
-                if (!clearedLevels.includes(currentLevel)) {
-                    clearedLevels.push(currentLevel);
-                    localStorage.setItem('puzzle_clearedLevels', JSON.stringify(clearedLevels));
+        if (hasKey) {
+            let idxs = [];
+            for (let i = 2; i < bestPath.length - 2; i++) {
+                if (finalMap[bestPath[i].r][bestPath[i].c] === 1) idxs.push(i);
+            }
+            if (idxs.length >= 2) {
+                idxs.sort((a, b) => a - b);
+                
+                let kIdx = -1, lIdx = -1;
+                let safetyFallback = 0;
+                
+                while (safetyFallback < 50) {
+                    safetyFallback++;
+                    let tempK = idxs[Math.floor(Math.random() * (idxs.length / 2))];
+                    let tempL = idxs[Math.floor(idxs.length / 2) + Math.floor(Math.random() * (idxs.length / 2))];
+                    
+                    if (tempK >= tempL) continue;
+                    
+                    let structureConflict = false;
+                    for (let i = 0; i < bestPath.length; i++) {
+                        let node = bestPath[i];
+                        if (node.bridgeR !== undefined && node.firstStepIdx !== undefined) {
+                            let firstPass = node.firstStepIdx;
+                            let secondPass = i;
+                            if (tempK > firstPass && tempK < secondPass) {
+                                structureConflict = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!structureConflict) {
+                        kIdx = tempK;
+                        lIdx = tempL;
+                        break;
+                    }
                 }
-                maxUnlockedLevel = Math.max(maxUnlockedLevel, currentLevel + 1);
-                localStorage.setItem('puzzle_maxUnlockedLevel', maxUnlockedLevel);
-
-                if (currentLevel < MAX_LEVEL) {
-                    const winMsg = document.createElement('div');
-                    winMsg.className = 'win-text-simple';
-                    winMsg.innerText = "GOOD!";
-                    document.body.appendChild(winMsg);
-
-                    setTimeout(() => { 
-                        document.getElementById('next-btn').style.display = 'block'; 
-                    }, 500);
-                }
-                else { 
-                    document.getElementById('message').innerText = "YOU DID IT!"; 
-                    setTimeout(() => { 
-                        document.getElementById('outro-screen').style.visibility = 'visible'; 
-                        document.getElementById('outro-screen').style.opacity = '1'; 
-                        setInterval(() => fireConfetti(20), 800); 
-                    }, 1500); 
+                
+                if (kIdx !== -1 && lIdx !== -1) {
+                    finalMap[bestPath[kIdx].r][bestPath[kIdx].c] = 8;
+                    finalMap[bestPath[lIdx].r][bestPath[lIdx].c] = 9;
+                } else {
+                    continue;
                 }
             }
         }
 
-        window.nextLevel = function() { 
-            if (currentLevel < MAX_LEVEL) { 
-                const oldWinText = document.querySelector('.win-text-simple');
-                if (oldWinText) oldWinText.remove();
+        if (hasArrow) {
+            let idxs = [];
+            for (let i = 2; i < bestPath.length - 2; i++) {
+                if (finalMap[bestPath[i].r][bestPath[i].c] === 1) idxs.push(i);
+            }
+            if (idxs.length > 0) {
+                let idx = idxs[Math.floor(Math.random() * idxs.length)];
+                let curr = bestPath[idx], prev = bestPath[idx - 1];
+                if (curr.r < prev.r) finalMap[curr.r][curr.c] = 10;
+                else if (curr.r > prev.r) finalMap[curr.r][curr.c] = 11;
+                else if (curr.c < prev.c) finalMap[curr.r][curr.c] = 12;
+                else if (curr.c > prev.c) finalMap[curr.r][curr.c] = 13;
+            }
+        }
 
-                currentLevel++; 
-                loadLevel(currentLevel); 
-            } 
-        };
+        if (hasFog) {
+            let idxs = [];
+            for (let i = 2; i < bestPath.length - 2; i++) {
+                if (finalMap[bestPath[i].r][bestPath[i].c] === 1) idxs.push(i);
+            }
+            if (idxs.length > 0) {
+                let idx = idxs[Math.floor(Math.random() * idxs.length)];
+                finalMap[bestPath[idx].r][bestPath[idx].c] = 14;
+            }
+        }
 
-        // 初始化載入 Lv.1
-        loadLevel(currentLevel);
-    })();
-</script>
-</body>
-</html>
+        let isMapValid = true;
+        if (hasPortal && !checkMapContains(finalMap, 3)) isMapValid = false;
+        if (hasBomb && !checkMapContains(finalMap, 4)) isMapValid = false;
+        if (hasIce && !checkMapContains(finalMap, 6)) isMapValid = false;
+        if (hasBridge && !checkMapContains(finalMap, 7)) isMapValid = false;
+        if (hasKey && !checkMapContains(finalMap, 8)) isMapValid = false;
+        if (hasArrow && !checkMapContains(finalMap, [10, 11, 12, 13])) isMapValid = false;
+        if (hasFog && !checkMapContains(finalMap, 14)) isMapValid = false;
+
+        if (isMapValid || globalAttempts >= 300) {
+            return { map: finalMap, portals: currentPortals, bombs: currentBombs };
+        }
+    }
+    return { map: finalMap, portals: {}, bombs: {} };
+}
+
+export default function handler(req, res) {
+    const level = parseInt(req.query.level) || 1;
+    
+    let unlocks = [];
+    if (level >= 9) unlocks.push('portal');
+    if (level >= 17) unlocks.push('bomb');
+    if (level >= 32) unlocks.push('ice');
+    if (level >= 52) unlocks.push('bridge');
+    if (level >= 84) unlocks.push('key');
+    if (level >= 120) unlocks.push('arrow');
+    if (level >= 180) unlocks.push('fog');
+
+    let isTutorial = false; let forceFeat = null;
+    if (level >= 9 && level <= 11) { isTutorial = true; forceFeat = 'portal'; }
+    if (level >= 17 && level <= 19) { isTutorial = true; forceFeat = 'bomb'; }
+    if (level >= 32 && level <= 34) { isTutorial = true; forceFeat = 'ice'; }
+    if (level >= 52 && level <= 54) { isTutorial = true; forceFeat = 'bridge'; }
+    if (level >= 84 && level <= 86) { isTutorial = true; forceFeat = 'key'; }
+    if (level >= 120 && level <= 122) { isTutorial = true; forceFeat = 'arrow'; }
+    if (level >= 180 && level <= 182) { isTutorial = true; forceFeat = 'fog'; }
+
+    let baseSize = 4 + Math.floor((level - 1) / 8);
+    if (isTutorial) baseSize = Math.max(4, baseSize - 2);
+    let rows = Math.min(12, Math.max(4, baseSize));
+
+    let activeFeats = [];
+    if (isTutorial && forceFeat) activeFeats = [forceFeat];
+    else {
+        let maxCombo = level > 200 ? 6 : (level > 100 ? 4 : 3);
+        let shuffled = unlocks.sort(() => Math.random() - 0.5);
+        activeFeats = shuffled.slice(0, Math.min(maxCombo, shuffled.length));
+    }
+
+    let coverage = 0.45 + ((level % 8) * 0.05); 
+    if (isTutorial) coverage = 0.35;
+
+    const mapData = generateSolvableMap(rows, rows, coverage, activeFeats);
+    
+    res.status(200).json({
+        rows: rows,
+        cols: rows,
+        map: mapData.map,
+        portals: mapData.portals,
+        bombs: mapData.bombs,
+        isFogLevel: activeFeats.includes('fog'),
+        info: activeFeats
+    });
+}
