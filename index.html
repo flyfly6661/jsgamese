@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>一筆畫拼圖 - ULTIMATE</title>
+    <title>一筆畫拼圖 - ULTIMATE 最終紀錄版</title>
     <style>
         :root { --cols: 5; }
         * { box-sizing: border-box; }
@@ -321,7 +321,7 @@
         };
         
         function selectLevel(lvl) {
-            currentLevel = lvl;
+            currentLevel = parseInt(lvl);
             window.closeMenu();
             loadLevel(currentLevel);
         }
@@ -345,7 +345,7 @@
                 alert("🔓 開發者模式已解鎖！現在你可以直接點擊標題跳關了。");
                 return;
             }
-            secretTapTimer = setTimeout(() => { secretTapCountReset(); }, 1000);
+            secretTapTimer = setTimeout(() => { secretTapCountReset();}, 1000);
         };
         
         function TapCountReset() {
@@ -372,11 +372,23 @@
             } 
         };
 
-        // --- 向 Serverless 後端提取關卡 ---
+        // --- 向 Serverless 後端提取關卡與地圖快取 ---
         async function loadLevel(level) {
+            level = parseInt(level); // 👈 嚴格確保 level 為整數，防止路徑解析異常
+            console.log("載入關卡編號:", level);
             try {
-                const response = await fetch(`${API_BASE}/api/level?level=${level}`);
-                const data = await response.json();
+                let data;
+                const cachedMaps = JSON.parse(localStorage.getItem('puzzle_cachedMaps')) || {};
+
+                // 快取對應關卡地圖，確保重新整理或重玩長相固定
+                if (cachedMaps[level]) {
+                    data = cachedMaps[level];
+                } else {
+                    const response = await fetch(`${API_BASE}/api/level?level=${level}`);
+                    data = await response.json();
+                    cachedMaps[level] = data;
+                    localStorage.setItem('puzzle_cachedMaps', JSON.stringify(cachedMaps));
+                }
 
                 currentRows = data.rows;
                 currentCols = data.cols;
