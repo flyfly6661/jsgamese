@@ -448,6 +448,7 @@
         }
 
         function initGame() {
+            console.log("當前關卡地圖二維陣列:", JSON.stringify(levelMap));
             const board = document.getElementById('game-board');
             board.style.gridTemplateColumns = `repeat(${currentCols}, 1fr)`;
             board.style.gridTemplateRows = `repeat(${currentRows}, 1fr)`;
