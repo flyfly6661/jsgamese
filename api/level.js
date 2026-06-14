@@ -10,6 +10,10 @@ function checkMapContains(m, targetValues) {
     return false;
 }
 
+/**
+ * 驗證地圖連通性 (Flood Fill 演算法)
+ * 確保所有非 0 的有效格子皆處於同一個連通分量內，無隨機孤島
+ */
 function validateMapConnectivity(map, currentPortals) {
     const rows = map.length;
     const cols = map[0].length;
@@ -43,6 +47,15 @@ function validateMapConnectivity(map, currentPortals) {
         const [r, c] = queue.shift();
         visitedCount++;
 
+        // 處理傳送門特殊連通跳躍
+        if (map[r][c] === 3) {
+            let portalDest = currentPortals[`${r},${c}`];
+            if (portalDest && !visited[portalDest.r][portalDest.c]) {
+                visited[portalDest.r][portalDest.c] = true;
+                queue.push([portalDest.r, portalDest.c]);
+            }
+        }
+
         for (let i = 0; i < 4; i++) {
             const nr = r + dr[i];
             const nc = c + dc[i];
@@ -51,15 +64,6 @@ function validateMapConnectivity(map, currentPortals) {
                 if (!visited[nr][nc] && map[nr][nc] !== 0) {
                     visited[nr][nc] = true;
                     queue.push([nr, nc]);
-                    
-                    // 連通性驗證時將傳送門（3）的跳躍點納入考量
-                    if (map[nr][nc] === 3) {
-                        let portalDest = currentPortals[`${nr},${nc}`];
-                        if (portalDest && !visited[portalDest.r][portalDest.c]) {
-                            visited[portalDest.r][portalDest.c] = true;
-                            queue.push([portalDest.r, portalDest.c]);
-                        }
-                    }
                 }
             }
         }
@@ -104,13 +108,25 @@ function generateSolvableMap(rows, cols, coverage, features) {
                     }
                 }
                 
+                // 十字橋核心生成邏輯 (已修正斷層與結構衝突 Bug)
                 if (!moved && hasBridge && currentPath.length >= 4 && bridgeCountLocal < 5) {
                     let dirs = [{ dr: -2, dc: 0 }, { dr: 2, dc: 0 }, { dr: 0, dc: -2 }, { dr: 0, dc: 2 }];
                     for (let dir of dirs) {
                         let nnr = r + dir.dr, nnc = c + dir.dc; let mr = r + dir.dr / 2, mc = c + dir.dc / 2;
                         if (nnr >= 0 && nnr < rows && nnc >= 0 && nnc < cols && !tempVisited[nnr][nnc] && tempVisited[mr][mc]) {
-                            let idx = currentPath.findIndex(p => p.r === mr && p.c === mc);
-                            if (idx > 0 && idx < currentPath.length - 1) {
+                            
+                            // 由後往前搜尋橋中心點，確保物理幾何相鄰（排除傳送門干擾）
+                            let idx = -1;
+                            for (let k = currentPath.length - 2; k > 0; k--) {
+                                if (currentPath[k].r === mr && currentPath[k].c === mc) {
+                                    let pN = currentPath[k - 1], nN = currentPath[k + 1];
+                                    if (Math.abs(pN.r - mr) + Math.abs(pN.c - mc) === 1 && Math.abs(nN.r - mr) + Math.abs(nN.c - mc) === 1) {
+                                        idx = k; break;
+                                    }
+                                }
+                            }
+
+                            if (idx > 0) {
                                 let prevNode = currentPath[idx - 1];
                                 let nextNode = currentPath[idx + 1];
                                 let firstPassIsVertical = (prevNode.c === nextNode.c);
@@ -118,8 +134,12 @@ function generateSolvableMap(rows, cols, coverage, features) {
                                 let canCross = false;
                                 if (firstPassIsVertical && dir.dr === 0) canCross = true;
                                 if (firstPassIsHorizontal && dir.dc === 0) canCross = true;
+                                
                                 if (canCross) {
+                                    // 修正：將第二次經過的中心點明確塞入路徑，維持陣列物理連續性
+                                    currentPath.push({ r: mr, c: mc, isBridgeSecondPass: true });
                                     currentPath.push({ r: nnr, c: nnc, bridgeR: mr, bridgeC: mc, firstStepIdx: idx });
+                                    
                                     r = nnr; c = nnc; tempVisited[nnr][nnc] = true;
                                     bridgeCountLocal++;
                                     moved = true; break;
@@ -148,12 +168,18 @@ function generateSolvableMap(rows, cols, coverage, features) {
         finalMap = Array.from({ length: rows }, () => Array(cols).fill(0));
         currentPortals = {}; currentBombs = {};
 
-        for (let i = 0; i < bestPath.length; i++) { let p = bestPath[i]; finalMap[p.r][p.c] = 1; }
+        // 渲染基礎路徑（排除過橋重複點，避免複寫）
+        for (let i = 0; i < bestPath.length; i++) { 
+            let p = bestPath[i]; 
+            if (p.isBridgeSecondPass) continue;
+            finalMap[p.r][p.c] = 1; 
+        }
         finalMap[bestPath[0].r][bestPath[0].c] = 2;
 
+        // 生成傳送門與標記十字橋中心
         for (let i = 0; i < bestPath.length; i++) {
             let p = bestPath[i];
-            if (i > 0 && !p.bridgeR) {
+            if (i > 0 && !p.bridgeR && !p.isBridgeSecondPass) {
                 let prev = bestPath[i - 1];
                 if (Math.abs(p.r - prev.r) + Math.abs(p.c - prev.c) > 1 && finalMap[prev.r][prev.c] === 1 && finalMap[p.r][p.c] === 1) {
                     finalMap[prev.r][prev.c] = 3; finalMap[p.r][p.c] = 3;
@@ -265,7 +291,7 @@ function generateSolvableMap(rows, cols, coverage, features) {
         if (hasArrow && !checkMapContains(finalMap, [10, 11, 12, 13])) isMapValid = false;
         if (hasFog && !checkMapContains(finalMap, 14)) isMapValid = false;
 
-        // --- 新增連通性防呆檢查 ---
+        // 🌟 核心增強：執行安全 Flood Fill 檢查，杜絕任何無解孤島圖形
         if (isMapValid && !validateMapConnectivity(finalMap, currentPortals)) {
             isMapValid = false;
         }
