@@ -10,6 +10,64 @@ function checkMapContains(m, targetValues) {
     return false;
 }
 
+function validateMapConnectivity(map, currentPortals) {
+    const rows = map.length;
+    const cols = map[0].length;
+    
+    let startR = -1, startC = -1;
+    let totalPlayable = 0;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (map[r][c] !== 0) {
+                totalPlayable++;
+                if (map[r][c] === 2) {
+                    startR = r;
+                    startC = c;
+                }
+            }
+        }
+    }
+
+    if (startR === -1 || totalPlayable === 0) return false;
+
+    const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+    let visitedCount = 0;
+    const queue = [[startR, startC]];
+    visited[startR][startC] = true;
+
+    const dr = [-1, 1, 0, 0];
+    const dc = [0, 0, -1, 1];
+
+    while (queue.length > 0) {
+        const [r, c] = queue.shift();
+        visitedCount++;
+
+        for (let i = 0; i < 4; i++) {
+            const nr = r + dr[i];
+            const nc = c + dc[i];
+
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                if (!visited[nr][nc] && map[nr][nc] !== 0) {
+                    visited[nr][nc] = true;
+                    queue.push([nr, nc]);
+                    
+                    // 連通性驗證時將傳送門（3）的跳躍點納入考量
+                    if (map[nr][nc] === 3) {
+                        let portalDest = currentPortals[`${nr},${nc}`];
+                        if (portalDest && !visited[portalDest.r][portalDest.c]) {
+                            visited[portalDest.r][portalDest.c] = true;
+                            queue.push([portalDest.r, portalDest.c]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return visitedCount === totalPlayable;
+}
+
 function generateSolvableMap(rows, cols, coverage, features) {
     let hasPortal = features.includes('portal'), hasBridge = features.includes('bridge');
     let hasIce = features.includes('ice'), hasBomb = features.includes('bomb');
@@ -114,7 +172,6 @@ function generateSolvableMap(rows, cols, coverage, features) {
             }
         }
 
-        // 防禦性修正：確保炸彈與隱藏牆只會覆蓋一般路徑 (1)
         if (hasBomb) {
             let validIndices = Array.from(bestPath.keys()).slice(2, -2).sort(() => Math.random() - 0.5);
             for (let i = 0; i < validIndices.length; i++) {
@@ -124,7 +181,6 @@ function generateSolvableMap(rows, cols, coverage, features) {
                     for (let j = 1; j <= hideCount; j++) {
                         if (idx + j >= bestPath.length) { canPlace = false; break; }
                         let nPos = bestPath[idx + j];
-                        // 嚴格檢查：必須是基本路徑方塊 (1) 才能設為炸彈引爆範圍，避免衝擊傳送門或十字橋邏輯
                         if (finalMap[nPos.r][nPos.c] !== 1) { canPlace = false; break; }
                         hidden.push({ r: nPos.r, c: nPos.c });
                     }
@@ -144,17 +200,13 @@ function generateSolvableMap(rows, cols, coverage, features) {
             }
             if (idxs.length >= 2) {
                 idxs.sort((a, b) => a - b);
-                
                 let kIdx = -1, lIdx = -1;
                 let safetyFallback = 0;
-                
                 while (safetyFallback < 50) {
                     safetyFallback++;
                     let tempK = idxs[Math.floor(Math.random() * (idxs.length / 2))];
                     let tempL = idxs[Math.floor(idxs.length / 2) + Math.floor(Math.random() * (idxs.length / 2))];
-                    
                     if (tempK >= tempL) continue;
-                    
                     let structureConflict = false;
                     for (let i = 0; i < bestPath.length; i++) {
                         let node = bestPath[i];
@@ -167,19 +219,13 @@ function generateSolvableMap(rows, cols, coverage, features) {
                             }
                         }
                     }
-                    
                     if (!structureConflict) {
-                        kIdx = tempK;
-                        lIdx = tempL;
-                        break;
+                        kIdx = tempK; lIdx = tempL; break;
                     }
                 }
-                
                 if (kIdx !== -1 && lIdx !== -1) {
                     finalMap[bestPath[kIdx].r][bestPath[kIdx].c] = 8;
                     finalMap[bestPath[lIdx].r][bestPath[lIdx].c] = 9;
-                } else {
-                    continue;
                 }
             }
         }
@@ -218,6 +264,11 @@ function generateSolvableMap(rows, cols, coverage, features) {
         if (hasKey && !checkMapContains(finalMap, 8)) isMapValid = false;
         if (hasArrow && !checkMapContains(finalMap, [10, 11, 12, 13])) isMapValid = false;
         if (hasFog && !checkMapContains(finalMap, 14)) isMapValid = false;
+
+        // --- 新增連通性防呆檢查 ---
+        if (isMapValid && !validateMapConnectivity(finalMap, currentPortals)) {
+            isMapValid = false;
+        }
 
         if (isMapValid || globalAttempts >= 300) {
             return { map: finalMap, portals: currentPortals, bombs: currentBombs };
