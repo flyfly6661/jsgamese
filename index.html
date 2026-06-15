@@ -103,9 +103,10 @@
         .cell[class*="arrow-"] { background-color: #0f766e; }
         .cell[class*="arrow-"].path { background-color: #ec4899; }
         
-        /* 黑夜迷霧核心樣式 */
-        .foggy.cell:not(.revealed):not(.lightbulb) { background-color: #020617 !important; border: none !important; box-shadow: none !important; }
-        .foggy.cell:not(.revealed):not(.lightbulb)::before, .foggy.cell:not(.revealed):not(.lightbulb)::after { opacity: 0 !important; }
+        /* ✨【黑夜迷霧核心樣式修正】：在 .foggy 與 .cell 之間補上關鍵空格！ */
+        .foggy .cell:not(.revealed):not(.lightbulb) { background-color: #020617 !important; border: none !important; box-shadow: none !important; }
+        .foggy .cell:not(.revealed):not(.lightbulb)::before, .foggy .cell:not(.revealed):not(.lightbulb)::after { opacity: 0 !important; }
+        
         .cell.lightbulb { background-color: #fde047; box-shadow: 0 0 20px #fde047; z-index: 6; }
         .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
         
@@ -368,7 +369,7 @@
             currentPortals = data.portals || {};
             currentBombs = data.bombs || {};
             
-            // ✨【迷霧修正】：每次 Fetch 後端資料，重新同步正確的全域迷霧變數
+            // 同步全域迷霧狀態
             isFogLevel = data.isFogLevel || false;
 
             let infoMix = data.info && data.info.length > 0 ? data.info.join(' ') : 'Basic';
@@ -403,7 +404,6 @@
         initGame();
     };
 
-    // ✨【迷霧完全重製修正】：完全重製時，除了清空 local 快取，必須清洗迷霧布林開關
     window.clearAllProgress = function() {
         if (confirm("🚨 警告：確定要完全重製遊戲嗎？\n這將會刪除您所有的通關紀錄與緩存，並回到第一關！")) {
             localStorage.removeItem('puzzle_clearedLevels');
@@ -450,9 +450,8 @@
         if (oldWinText) oldWinText.remove();
 
         path = []; totalPlayable = 0; isDrawing = false; isUnlocked = false; 
-        
-        // ✨【迷霧初始化修正】：每一次重新構建地圖，都洗牌開霧狀態，並重新套用大外框 class
         isFogCleared = false;
+        
         if (isFogLevel) { 
             board.classList.add('foggy'); 
         } else { 
@@ -649,7 +648,7 @@
                 });
             }
 
-            // ✨【炸彈計格漏洞修復】：炸毀牆壁時，必須將新牆格數加回 totalPlayable
+            // 炸彈漏洞修復
             if (v === 4) {
                 el.classList.remove('bomb');
                 levelMap[nextR][nextC] = 1;
@@ -669,7 +668,7 @@
 
             if (isFogLevel && !isFogCleared) updateVision();
 
-            // ✨【傳送門盲跳開霧修復】
+            // 傳送門盲跳開霧修復
             if (v === 3) {
                 let link = currentPortals[`${nextR},${nextC}`];
                 if (link) {
