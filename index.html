@@ -638,20 +638,23 @@
             }
 
             if (v === 4) {
-                el.classList.remove('bomb');
-                levelMap[nextR][nextC] = 1;
-                let hidden = currentBombs[`${nextR},${nextC}`];
-                if (hidden) {
-                    hidden.forEach(pos => {
-                        let rock = getCell(pos.r, pos.c);
-                        if (rock) {
-                            rock.classList.remove('rock');
-                            rock.classList.add('boom-clear', 'playable');
-                            levelMap[pos.r][pos.c] = 1;
-                        }
-                    });
-                }
+              el.classList.remove('bomb');
+              levelMap[nextR][nextC] = 1;
+              let hidden = currentBombs[`${nextR},${nextC}`];
+              if (hidden) {
+                   hidden.forEach(pos => {
+                      let rock = getCell(pos.r, pos.c);
+                     if (rock) {
+                          rock.classList.remove('rock');
+                         rock.classList.add('boom-clear', 'playable');
+                         levelMap[pos.r][pos.c] = 1; // 成功轉化為一般道路
             }
+        });
+        
+        // ✨【關鍵修復】：將炸開的新道路格數，動態加進通關目標總數中！
+        totalPlayable += hidden.length; 
+    }
+}
 
             if (isFogLevel && !isFogCleared) updateVision();
 
