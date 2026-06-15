@@ -367,7 +367,9 @@
             initialLevelMap = JSON.parse(JSON.stringify(levelMap));
             currentPortals = data.portals || {};
             currentBombs = data.bombs || {};
-            isFogLevel = data.isFogLevel;
+            
+            // ✨【迷霧修正】：每次 Fetch 後端資料，重新同步正確的全域迷霧變數
+            isFogLevel = data.isFogLevel || false;
 
             let infoMix = data.info && data.info.length > 0 ? data.info.join(' ') : 'Basic';
             document.getElementById('level-title').innerText = `LEVEL ${level}`;
@@ -401,7 +403,7 @@
         initGame();
     };
 
-    // ✨ 全新加入：完全重製進度工廠設定
+    // ✨【迷霧完全重製修正】：完全重製時，除了清空 local 快取，必須清洗迷霧布林開關
     window.clearAllProgress = function() {
         if (confirm("🚨 警告：確定要完全重製遊戲嗎？\n這將會刪除您所有的通關紀錄與緩存，並回到第一關！")) {
             localStorage.removeItem('puzzle_clearedLevels');
@@ -410,6 +412,10 @@
             clearedLevels = [];
             maxUnlockedLevel = 1;
             currentLevel = 1;
+            
+            isFogLevel = false;
+            isFogCleared = false;
+            
             loadLevel(1);
             alert("✨ 進度已完全重製，回歸初始狀態！");
         }
@@ -443,13 +449,19 @@
         const oldWinText = document.querySelector('.win-text-simple');
         if (oldWinText) oldWinText.remove();
 
-        path = []; totalPlayable = 0; isDrawing = false; isUnlocked = false; isFogCleared = false;
+        path = []; totalPlayable = 0; isDrawing = false; isUnlocked = false; 
+        
+        // ✨【迷霧初始化修正】：每一次重新構建地圖，都洗牌開霧狀態，並重新套用大外框 class
+        isFogCleared = false;
+        if (isFogLevel) { 
+            board.classList.add('foggy'); 
+        } else { 
+            board.classList.remove('foggy'); 
+        }
+
         bridgeVisits = {};
         document.getElementById('message').innerText = "";
         document.getElementById('next-btn').style.display = 'none';
-
-        if (isFogLevel) { board.classList.add('foggy'); } 
-        else { board.classList.remove('foggy'); }
 
         for (let r = 0; r < currentRows; r++) {
             for (let c = 0; c < currentCols; c++) {
@@ -637,35 +649,33 @@
                 });
             }
 
+            // ✨【炸彈計格漏洞修復】：炸毀牆壁時，必須將新牆格數加回 totalPlayable
             if (v === 4) {
-              el.classList.remove('bomb');
-              levelMap[nextR][nextC] = 1;
-              let hidden = currentBombs[`${nextR},${nextC}`];
-              if (hidden) {
-                   hidden.forEach(pos => {
-                      let rock = getCell(pos.r, pos.c);
-                     if (rock) {
-                          rock.classList.remove('rock');
-                         rock.classList.add('boom-clear', 'playable');
-                         levelMap[pos.r][pos.c] = 1; // 成功轉化為一般道路
+                el.classList.remove('bomb');
+                levelMap[nextR][nextC] = 1;
+                let hidden = currentBombs[`${nextR},${nextC}`];
+                if (hidden) {
+                    hidden.forEach(pos => {
+                        let rock = getCell(pos.r, pos.c);
+                        if (rock) {
+                            rock.classList.remove('rock');
+                            rock.classList.add('boom-clear', 'playable');
+                            levelMap[pos.r][pos.c] = 1;
+                        }
+                    });
+                    totalPlayable += hidden.length; 
+                }
             }
-        });
-        
-        // ✨【關鍵修復】：將炸開的新道路格數，動態加進通關目標總數中！
-        totalPlayable += hidden.length; 
-    }
-}
 
             if (isFogLevel && !isFogCleared) updateVision();
 
-            // ✨【傳送門盲跳 Bug 優化修復】
+            // ✨【傳送門盲跳開霧修復】
             if (v === 3) {
                 let link = currentPortals[`${nextR},${nextC}`];
                 if (link) {
                     path.push({ r: link.r, c: link.c });
                     getCell(link.r, link.c).classList.add('path');
                     
-                    // 在中斷迴圈前，強迫立即幫出口座標解鎖開霧
                     if (isFogLevel && !isFogCleared) {
                         updateVision();
                     }
@@ -674,7 +684,6 @@
                 break; 
             }
 
-            // 冰塊地形滑行慣性計算
             if (v === 6) {
                 let nnR = nextR + stepR, nnC = nextC + stepC;
                 if (nnR >= 0 && nnR < currentRows && nnC >= 0 && nnC < currentCols) {
@@ -688,7 +697,6 @@
 
         updateAvailableMoves();
         updateCurrentHead();
-        结构冲突 = false;
         checkWin();
     }
 
