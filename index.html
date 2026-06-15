@@ -607,11 +607,21 @@
 
                 if (isFogLevel && !isFogCleared) updateVision();
 
-                if (v === 3) { 
-                    let link = currentPortals[`${nextR},${nextC}`];
-                    if (link) { path.push({ r: link.r, c: link.c }); getCell(link.r, link.c).classList.add('path'); isDrawing = false; }
-                    break; 
-                }
+                if (v == 3) {
+                  let link = currentPortals[`${nextR},${nextC}`];
+                  if (link) {
+                        path.push({ r: link.r, c: link.c });
+                       getCell(link.r, link.c).classList.add('path');
+        
+                     
+                        if (isFogLevel) {
+                           updateVision(); 
+                        }
+        
+                       isDrawing = false;
+    }
+    break;
+}
 
                 if (v === 6) {
                     let nnR = nextR + stepR, nnC = nextC + stepC;
