@@ -80,13 +80,16 @@
         }
         .cell.path { background-color: #ec4899; animation: jelly 0.3s ease-out forwards; }
         
-/* 🔄 經典核心圖示與修正後的防覆蓋樣式 */
-        .cell.portal { background-color: transparent; z-index: 5; }
+        /* 🌀 傳送門：修正初始底色，補上星際光暈 */
+        .cell.portal { 
+            background-color: rgba(51, 65, 85, 0.9) !important; 
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.65);
+            z-index: 5; 
+        }
         .cell.portal::before { content: '🌀'; display: inline-block; animation: spin 3s linear infinite; }
         
         .cell.bomb { background-color: rgba(51, 65, 85, 0.9); cursor: pointer; }
         .cell.bomb::before { content: '💣'; animation: pulseObj 0.8s infinite alternate; }
-        
         .cell.rock { background-color: rgba(15, 23, 42, 0.87); box-shadow: inset 0 0 10px black; }
         .cell.rock::before { content: '🧱'; opacity: 0.9; }
         
@@ -101,18 +104,10 @@
         
         .cell.key { background-color: #facc15; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5); }
         .cell.key::before { content: '🔑'; animation: pulseObj 1s infinite alternate; }
-        
         .cell.lock { background-color: #1e293b; border: 2px solid #facc15; }
         .cell.lock::before { content: '🔒'; opacity: 0.8; }
         
-        .cell.lightbulb { background-color: rgba(51, 65, 85, 0.9); z-index: 6; }
-        .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
-
-        /* 🔥【在這裡加入】被踩踏後的強制變色防線，完美融合一筆畫軌跡 */
-        .cell.portal.path { background-color: #ec4899 !important; }
-        .cell.lightbulb.path { background-color: #ec4899 !important; }
-        
-        /* 🔼 單向帶圖示改回舊版按鈕外觀 */
+        /* 🔼 單向帶：還原舊版按鈕外觀 */
         .cell.arrow-up::before { content: '🔼'; opacity: 0.9; }
         .cell.arrow-down::before { content: '🔽'; opacity: 0.9; }
         .cell.arrow-left::before { content: '◀️'; opacity: 0.9; }
@@ -120,12 +115,21 @@
         .cell[class*="arrow-"] { background-color: rgba(51, 65, 85, 0.9); }
         .cell[class*="arrow-"].path { background-color: #ec4899; }
         
-        /* ✨【黑夜迷霧完美修復】：確保外框與格子間有空格，維持高權重渲染 */
+        /* 💡 燈泡：修正初始底色，補上微光特效 */
+        .cell.lightbulb { 
+            background-color: rgba(51, 65, 85, 0.9) !important; 
+            box-shadow: 0 0 12px rgba(253, 224, 71, 0.4);
+            z-index: 6; 
+        }
+        .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
+
+        /* 🌸 核心路徑防覆蓋：當傳送門與燈泡被踩過後，強力轉為粉紅軌跡 */
+        .cell.portal.path { background-color: #ec4899 !important; box-shadow: none !important; }
+        .cell.lightbulb.path { background-color: #ec4899 !important; box-shadow: none !important; }
+        
+        /* ✨【黑夜迷霧完美修復】：空格權重修正，迷霧黑幕絕對正常運作 */
         .foggy .cell:not(.revealed):not(.lightbulb) { background-color: #020617 !important; border: none !important; box-shadow: none !important; }
         .foggy .cell:not(.revealed):not(.lightbulb)::before, .foggy .cell:not(.revealed):not(.lightbulb)::after { opacity: 0 !important; }
-        
-        .cell.lightbulb { background-color: rgba(51, 65, 85, 0.9); z-index: 6; }
-        .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
         
         .cell.current-head { background-color: #1054e6 !important; box-shadow: 0 0 15px rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(0,0,0,0.2); animation: headPulse 0.8s infinite alternate; z-index: 10; }
         @keyframes headPulse { 0% { transform: scale(1); filter: brightness(1); } 100% { transform: scale(1.03); filter: brightness(1.2); } }
@@ -257,7 +261,7 @@
     let timerInterval = null, startTime = 0;
     let secretTapCount = 0, devModeActive = false, secretTapTimer;
 
-    // 🔄 說明書圖示同步換回經典舊版
+    // 🔄 說明書圖示換回經典版
     const manuals = [
         { lvl: 1, icon: '🟩', text: '<b>基本規則:</b>滑動填滿所有深色方塊，不能走回頭路。' },
         { lvl: 9, icon: '🌀', text: '<b>傳送門:</b>進入後會瞬間移動到另一端，並中斷畫筆，需重新點擊。' },
@@ -430,7 +434,6 @@
             maxUnlockedLevel = 1;
             currentLevel = 1;
             
-            // ✨ 確保完全重製時，全域迷霧狀態被完全洗淨
             isFogLevel = false;
             isFogCleared = false;
             
@@ -538,11 +541,11 @@
             const isVisited = path.some(p => p.r === nr && p.c === nc);
             if (isVisited && v !== 7) return;
 
-            // ✨【單向道絕對單一方向限制】：非唯一對齊順向者，發光提示一律不亮燈
-            if (v === 10 && dir.dr !== -1) return; // 🔼 向上帶：移動向量必須是向上(dr === -1)
-            if (v === 11 && dir.dr !== 1) return;  // 🔽 向下帶：移動向量必須是向下(dr === 1)
-            if (v === 12 && dir.dc !== -1) return; // ◀️ 向左帶：移動向量必須是向左(dc === -1)
-            if (v === 13 && dir.dc !== 1) return;  // ▶️ 向右帶：移動向量必須是向右(dc === 1)
+            // 🔼【單向道絕對單一方向限制】：非順向者發光提示不亮燈
+            if (v === 10 && dir.dr !== -1) return; // 🔼 向上帶：必須是由下往上(dr === -1)
+            if (v === 11 && dir.dr !== 1) return;  // 🔽 向下帶：必須是由上往下(dr === 1)
+            if (v === 12 && dir.dc !== -1) return; // ◀️ 向左帶：必須是由右往左(dc === -1)
+            if (v === 13 && dir.dc !== 1) return;  // ▶️ 向右帶：必須是由左往右(dc === 1)
 
             if (v === 7) {
                 const key = `${nr},${nc}`;
@@ -637,7 +640,7 @@
                 bridgeVisits[key].push(axis);
             }
 
-            // ✨【單向道絕對單一方向限制】：實際拉線滑入時，非完全對齊箭頭方向者一律直接撞牆(break)
+            // 🔼【單向道絕對單一方向限制】：實際拉線滑入時，非對齊箭頭方向者一律直接撞牆(break)
             if (v === 10 && stepR !== -1) break; // 🔼 向上帶：非由下往上移(stepR !== -1)則被阻斷
             if (v === 11 && stepR !== 1) break;  // 🔽 向下帶：非由上往下移(stepR !== 1)則被阻斷
             if (v === 12 && stepC !== -1) break; // ◀️ 向左帶：非由右往左移(stepC !== -1)則被阻斷
