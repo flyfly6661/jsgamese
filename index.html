@@ -78,7 +78,7 @@
         @keyframes jelly {
             0% { transform: scale(1); } 40% { transform: scale(0.8); } 70% { transform: scale(1.15); } 100% { transform: scale(1); }
         }
-                .cell.path { background-color: #ec4899; animation: jelly 0.3s ease-out forwards; }
+        .cell.path { background-color: #ec4899; animation: jelly 0.3s ease-out forwards; }
         .cell.portal { background-color: #7c3aed; box-shadow: 0 0 10px rgba(139, 92, 246, 0.8); z-index: 5; }
         .cell.portal::before { content: '🌀'; display: inline-block; animation: spin 3s linear infinite; }
         .cell.bomb { background-color: #334155; cursor: pointer; }
@@ -103,10 +103,9 @@
         .cell[class*="arrow-"] { background-color: #0f766e; }
         .cell[class*="arrow-"].path { background-color: #ec4899; }
         
-        /* ✨【黑夜迷霧核心樣式修正】：在 .foggy 與 .cell 之間補上關鍵空格！ */
-        .foggy .cell:not(.revealed):not(.lightbulb) { background-color: #020617 !important; border: none !important; box-shadow: none !important; }
-        .foggy .cell:not(.revealed):not(.lightbulb)::before, .foggy .cell:not(.revealed):not(.lightbulb)::after { opacity: 0 !important; }
-        
+        /* 黑夜迷霧核心樣式 */
+        .foggy.cell:not(.revealed):not(.lightbulb) { background-color: #020617 !important; border: none !important; box-shadow: none !important; }
+        .foggy.cell:not(.revealed):not(.lightbulb)::before, .foggy.cell:not(.revealed):not(.lightbulb)::after { opacity: 0 !important; }
         .cell.lightbulb { background-color: #fde047; box-shadow: 0 0 20px #fde047; z-index: 6; }
         .cell.lightbulb::before { content: '💡'; animation: pulseObj 0.5s infinite alternate; }
         
@@ -244,10 +243,10 @@
         { lvl: 1, icon: '🟩', text: '<b>基本規則:</b>滑動填滿所有深色方塊，不能走回頭路。' },
         { lvl: 9, icon: '🌀', text: '<b>傳送門:</b>進入後會瞬間移動到另一端，並中斷畫筆，需重新點擊。' },
         { lvl: 17, icon: '💣', text: '<b>炸彈與牆:</b>將線連到炸彈上，會炸毀周圍的「磚牆」開拓出隱藏路線!!' },
-        { lvl: 32, icon: '🧊', text: '<b>滑行冰塊:</b>踩到冰塊後無法轉彎，會滑動一格。' },
+        { lvl: 32, icon: '🧊', text: '<b>滑行冰塊:</b>踩到冰塊後無法轉彎，會一直線滑動直到撞到障礙物。' },
         { lvl: 52, icon: '🔀', text: '<b>十字橋:</b>唯一允許「走過兩次」的方塊，但兩次必須是垂直交叉(一橫一直)。' },
         { lvl: 84, icon: '🔑', text: '<b>鑰匙與鎖:</b>碰到鑰匙後，地圖上所有的「鎖鏈門」會瞬間解開變成平地。' },
-        { lvl: 120, icon: '🔼', text: '<b>單向帶:</b>具有方向箭頭的方塊，你不能逆著箭頭的方向滑進去 。' },
+        { lvl: 120, icon: '🔼', text: '<b>單向帶:</b>具有方向箭頭的方塊，你「只能」順著箭頭的方向滑進去。' },
         { lvl: 180, icon: '💡', text: '<b>探照視野:</b>地圖會被黑霧完全籠罩!你只能看見周圍一格的路，摸黑找到探照燈即可照亮全圖!!' }
     ];
 
@@ -368,9 +367,7 @@
             initialLevelMap = JSON.parse(JSON.stringify(levelMap));
             currentPortals = data.portals || {};
             currentBombs = data.bombs || {};
-            
-            // 同步全域迷霧狀態
-            isFogLevel = data.isFogLevel || false;
+            isFogLevel = data.isFogLevel;
 
             let infoMix = data.info && data.info.length > 0 ? data.info.join(' ') : 'Basic';
             document.getElementById('level-title').innerText = `LEVEL ${level}`;
@@ -404,6 +401,7 @@
         initGame();
     };
 
+    // ✨ 全新加入：完全重製進度工廠設定
     window.clearAllProgress = function() {
         if (confirm("🚨 警告：確定要完全重製遊戲嗎？\n這將會刪除您所有的通關紀錄與緩存，並回到第一關！")) {
             localStorage.removeItem('puzzle_clearedLevels');
@@ -412,10 +410,6 @@
             clearedLevels = [];
             maxUnlockedLevel = 1;
             currentLevel = 1;
-            
-            isFogLevel = false;
-            isFogCleared = false;
-            
             loadLevel(1);
             alert("✨ 進度已完全重製，回歸初始狀態！");
         }
@@ -449,18 +443,13 @@
         const oldWinText = document.querySelector('.win-text-simple');
         if (oldWinText) oldWinText.remove();
 
-        path = []; totalPlayable = 0; isDrawing = false; isUnlocked = false; 
-        isFogCleared = false;
-        
-        if (isFogLevel) { 
-            board.classList.add('foggy'); 
-        } else { 
-            board.classList.remove('foggy'); 
-        }
-
+        path = []; totalPlayable = 0; isDrawing = false; isUnlocked = false; isFogCleared = false;
         bridgeVisits = {};
         document.getElementById('message').innerText = "";
         document.getElementById('next-btn').style.display = 'none';
+
+        if (isFogLevel) { board.classList.add('foggy'); } 
+        else { board.classList.remove('foggy'); }
 
         for (let r = 0; r < currentRows; r++) {
             for (let c = 0; c < currentCols; c++) {
@@ -520,10 +509,10 @@
             const isVisited = path.some(p => p.r === nr && p.c === nc);
             if (isVisited && v !== 7) return;
 
-            if (v === 10 && dir.dr === 1) return;
-            if (v === 11 && dir.dr === -1) return;
-            if (v === 12 && dir.dc === 1) return;
-            if (v === 13 && dir.dc === -1) return;
+            if (v === 10 && dir.dr !== -1) return; // 向上帶(10)：移動向量必須是向上(dr===-1)，否則阻斷
+            if (v === 11 && dir.dr !== 1) return;  // 向下帶(11)：移動向量必須是向下(dr===1)，否則阻斷
+            if (v === 12 && dir.dc !== -1) return; // 向左帶(12)：移動向量必須是向左(dc===-1)，否則阻斷
+            if (v === 13 && dir.dc !== 1) return;  // 向右帶(13)：移動向量必須是向右(dc===1)，否則阻斷
 
             if (v === 7) {
                 const key = `${nr},${nc}`;
@@ -618,11 +607,11 @@
                 bridgeVisits[key].push(axis);
             }
 
-            if (v === 10 && stepR === 1) break;
-            if (v === 11 && stepR === -1) break;
-            if (v === 12 && stepC === 1) break;
-            if (v === 13 && stepC === -1) break;
-
+           
+            if (v === 10 && stepR !== -1) break; // 向上帶：除非行進方向是向上(stepR===-1)，否則撞牆
+            if (v === 11 && stepR !== 1) break;  // 向下帶：除非行進方向是向下(stepR===1)，否則撞牆
+            if (v === 12 && stepC !== -1) break; // 向左帶：除非行進方向是向左(stepC===-1)，否則撞牆
+            if (v === 13 && stepC !== 1) break;  // 向右帶：除非行進方向是向右(stepC===1)，否則撞牆
             let el = getCell(nextR, nextC);
             path.push({ r: nextR, c: nextC });
 
@@ -648,27 +637,28 @@
                 });
             }
 
-            // 炸彈漏洞修復
             if (v === 4) {
-                el.classList.remove('bomb');
-                levelMap[nextR][nextC] = 1;
-                let hidden = currentBombs[`${nextR},${nextC}`];
-                if (hidden) {
-                    hidden.forEach(pos => {
-                        let rock = getCell(pos.r, pos.c);
-                        if (rock) {
-                            rock.classList.remove('rock');
-                            rock.classList.add('boom-clear', 'playable');
-                            levelMap[pos.r][pos.c] = 1;
-                        }
-                    });
-                    totalPlayable += hidden.length; 
-                }
+              el.classList.remove('bomb');
+              levelMap[nextR][nextC] = 1;
+              let hidden = currentBombs[`${nextR},${nextC}`];
+              if (hidden) {
+                   hidden.forEach(pos => {
+                      let rock = getCell(pos.r, pos.c);
+                     if (rock) {
+                          rock.classList.remove('rock');
+                         rock.classList.add('boom-clear', 'playable');
+                         levelMap[pos.r][pos.c] = 1; // 成功轉化為一般道路
             }
+        });
+        
+        // ✨【關鍵修復】：將炸開的新道路格數，動態加進通關目標總數中！
+        totalPlayable += hidden.length; 
+    }
+}
 
             if (isFogLevel && !isFogCleared) updateVision();
 
-            // 傳送門盲跳開霧修復
+          
             if (v === 3) {
                 let link = currentPortals[`${nextR},${nextC}`];
                 if (link) {
@@ -683,6 +673,7 @@
                 break; 
             }
 
+            // 冰塊地形滑行慣性計算
             if (v === 6) {
                 let nnR = nextR + stepR, nnC = nextC + stepC;
                 if (nnR >= 0 && nnR < currentRows && nnC >= 0 && nnC < currentCols) {
@@ -696,6 +687,7 @@
 
         updateAvailableMoves();
         updateCurrentHead();
+        结构冲突 = false;
         checkWin();
     }
 
